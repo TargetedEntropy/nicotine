@@ -102,12 +102,12 @@ impl X11Manager {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
 
+        // Send _NET_ACTIVE_WINDOW message for window manager
         let net_active_window = self.conn
             .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
             .reply()?
             .atom;
 
-        // Send _NET_ACTIVE_WINDOW message
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
             format: 32,

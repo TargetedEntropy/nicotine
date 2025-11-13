@@ -1,11 +1,13 @@
 mod config;
 mod cycle_state;
+mod daemon;
 mod overlay;
 mod x11_manager;
 
 use anyhow::Result;
 use config::Config;
 use cycle_state::CycleState;
+use daemon::Daemon;
 use overlay::run_overlay;
 use std::env;
 use std::fs::{File, OpenOptions};
@@ -22,6 +24,12 @@ fn main() -> Result<()> {
     let x11 = Arc::new(X11Manager::new()?);
 
     match command {
+        "daemon" => {
+            println!("Starting EVE Multibox daemon...");
+            let mut daemon = Daemon::new(x11);
+            daemon.run()?;
+        }
+
         "overlay" => {
             println!("Starting EVE Multibox Overlay...");
             let state = Arc::new(Mutex::new(CycleState::new()));
@@ -61,7 +69,14 @@ fn main() -> Result<()> {
             println!("✓ Stacked {} windows", windows.len());
         }
 
-        "cycle-forward" | "forward" => {
+        "cycle-forward" | "forward" | "f" => {
+            // Try daemon first
+            if daemon::send_command("forward").is_ok() {
+                return Ok(());
+            }
+
+            // Fallback to direct mode
+
             // Try to acquire lock, exit immediately if already running
             let lock_file = "/tmp/eve-multibox-cycle.lock";
             let mut file = match OpenOptions::new()
@@ -99,7 +114,14 @@ fn main() -> Result<()> {
             // Lock is automatically released when file is dropped
         }
 
-        "cycle-backward" | "backward" => {
+        "cycle-backward" | "backward" | "b" => {
+            // Try daemon first
+            if daemon::send_command("backward").is_ok() {
+                return Ok(());
+            }
+
+            // Fallback to direct mode
+
             // Try to acquire lock, exit immediately if already running
             let lock_file = "/tmp/eve-multibox-cycle.lock";
             let mut file = match OpenOptions::new()
@@ -145,11 +167,15 @@ fn main() -> Result<()> {
             println!("EVE Multibox - Rust Edition");
             println!();
             println!("Usage:");
+            println!("  eve-multibox daemon        - Start background daemon (recommended)");
             println!("  eve-multibox overlay       - Start the overlay");
             println!("  eve-multibox stack         - Stack all EVE windows");
             println!("  eve-multibox forward       - Cycle forward");
             println!("  eve-multibox backward      - Cycle backward");
             println!("  eve-multibox init-config   - Create default config.toml");
+            println!();
+            println!("Note: For best performance, start the daemon first:");
+            println!("  eve-multibox daemon &");
         }
     }
 
