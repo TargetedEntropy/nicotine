@@ -2,6 +2,8 @@
 
 High-performance EVE Online multiboxing tool for X11/Linux, inspired by EVE-O Preview.
 
+[Illuminated is recruiting!](https://illuminatedcorp.com)
+
 ## Features
 
 - **Instant client cycling** with mouse buttons (forward/backward)
