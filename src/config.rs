@@ -118,3 +118,90 @@ impl Config {
         self.display_height - self.panel_height
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_eve_x_centers_window() {
+        let config = Config {
+            display_width: 1920,
+            display_height: 1080,
+            panel_height: 0,
+            eve_width: 1000,
+            eve_height: 1080,
+            overlay_x: 10.0,
+            overlay_y: 10.0,
+        };
+
+        // Window should be centered: (1920 - 1000) / 2 = 460
+        assert_eq!(config.eve_x(), 460);
+    }
+
+    #[test]
+    fn test_eve_y_is_zero() {
+        let config = Config {
+            display_width: 1920,
+            display_height: 1080,
+            panel_height: 0,
+            eve_width: 1000,
+            eve_height: 1080,
+            overlay_x: 10.0,
+            overlay_y: 10.0,
+        };
+
+        assert_eq!(config.eve_y(), 0);
+    }
+
+    #[test]
+    fn test_eve_height_adjusted_with_panel() {
+        let config = Config {
+            display_width: 1920,
+            display_height: 1080,
+            panel_height: 40,
+            eve_width: 1000,
+            eve_height: 1080,
+            overlay_x: 10.0,
+            overlay_y: 10.0,
+        };
+
+        // Height should be: 1080 - 40 = 1040
+        assert_eq!(config.eve_height_adjusted(), 1040);
+    }
+
+    #[test]
+    fn test_eve_height_adjusted_without_panel() {
+        let config = Config {
+            display_width: 1920,
+            display_height: 1080,
+            panel_height: 0,
+            eve_width: 1000,
+            eve_height: 1080,
+            overlay_x: 10.0,
+            overlay_y: 10.0,
+        };
+
+        assert_eq!(config.eve_height_adjusted(), 1080);
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = Config {
+            display_width: 7680,
+            display_height: 2160,
+            panel_height: 0,
+            eve_width: 4147,
+            eve_height: 2160,
+            overlay_x: 10.0,
+            overlay_y: 10.0,
+        };
+
+        let toml_str = toml::to_string(&config).unwrap();
+        let deserialized: Config = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(deserialized.display_width, 7680);
+        assert_eq!(deserialized.display_height, 2160);
+        assert_eq!(deserialized.eve_width, 4147);
+    }
+}
