@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 pub struct X11Manager {
     conn: Arc<RustConnection>,
     screen_num: usize,
+    net_active_window_atom: Atom,
 }
 
 #[derive(Debug, Clone)]
@@ -21,9 +22,18 @@ impl X11Manager {
         let (conn, screen_num) = RustConnection::connect(None)
             .context("Failed to connect to X11 server")?;
 
+        let conn = Arc::new(conn);
+
+        // Pre-cache the _NET_ACTIVE_WINDOW atom (do roundtrip once at startup)
+        let net_active_window_atom = conn
+            .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
+            .reply()?
+            .atom;
+
         Ok(Self {
-            conn: Arc::new(conn),
+            conn,
             screen_num,
+            net_active_window_atom,
         })
     }
 
@@ -102,21 +112,17 @@ impl X11Manager {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
 
-        // Send _NET_ACTIVE_WINDOW message for window manager
-        let net_active_window = self.conn
-            .intern_atom(false, b"_NET_ACTIVE_WINDOW")?
-            .reply()?
-            .atom;
-
+        // Use pre-cached atom (no roundtrip!)
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
             sequence: 0,
             window: window_id,
-            type_: net_active_window,
+            type_: self.net_active_window_atom,
             data: ClientMessageData::from([2, 0, 0, 0, 0]),
         };
 
+        // Fire and forget - send_event doesn't block
         self.conn.send_event(
             false,
             root,
@@ -124,6 +130,7 @@ impl X11Manager {
             event,
         )?;
 
+        // Flush pushes to X11 but doesn't wait for processing
         self.conn.flush()?;
         Ok(())
     }
