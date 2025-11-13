@@ -8,13 +8,9 @@ BINARY_NAME="nicotine"
 echo "=== Nicotine Local Installer ==="
 echo
 
-# Check if binary exists
-if [ ! -f "target/release/$BINARY_NAME" ]; then
-    echo "[1/4] Building release binary..."
-    cargo build --release
-else
-    echo "[1/4] Using existing release binary"
-fi
+# Always build to ensure latest version
+echo "[1/4] Building release binary..."
+cargo build --release
 
 echo "[2/4] Installing to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"

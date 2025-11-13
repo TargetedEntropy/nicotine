@@ -15,11 +15,34 @@ pub struct OverlayApp {
 
 impl OverlayApp {
     pub fn new(
-        _cc: &eframe::CreationContext<'_>,
+        cc: &eframe::CreationContext<'_>,
         x11: Arc<X11Manager>,
         state: Arc<Mutex<CycleState>>,
         config: crate::config::Config,
     ) -> Self {
+        // Load embedded JetBrains Mono font
+        let mut fonts = egui::FontDefinitions::default();
+
+        fonts.font_data.insert(
+            "jetbrains_mono".to_owned(),
+            egui::FontData::from_static(include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf")),
+        );
+
+        // Set JetBrains Mono as the default font
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "jetbrains_mono".to_owned());
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .insert(0, "jetbrains_mono".to_owned());
+
+        cc.egui_ctx.set_fonts(fonts);
+
         Self {
             x11,
             state,
@@ -58,7 +81,7 @@ impl eframe::App for OverlayApp {
                 ui.horizontal(|ui| {
                     ui.colored_label(
                         egui::Color32::from_rgb(0, 255, 0),
-                        egui::RichText::new("=== NICOTINE ===").strong(),
+                        egui::RichText::new("🚬 NICOTINE 🚬").strong(),
                     );
                 });
 

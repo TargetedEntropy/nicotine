@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     match command {
         "start" => {
-            println!("Starting Nicotine...");
+            println!("Starting Nicotine 🚬");
 
             // Daemonize the process (safe Rust wrapper)
             let daemonize = Daemonize::new()
