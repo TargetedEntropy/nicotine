@@ -115,6 +115,7 @@ eve_width = 1037           # ~54% of display width
 eve_height = 1080
 overlay_x = 10.0
 overlay_y = 10.0
+show_overlay = true        # Set to false to run daemon-only mode (no GUI)
 enable_mouse_buttons = true
 forward_button = 276       # Button 9
 backward_button = 275      # Button 8

@@ -18,6 +18,8 @@ pub struct Config {
     pub forward_button: u16, // BTN_SIDE (mouse button 9)
     #[serde(default = "default_backward_button")]
     pub backward_button: u16, // BTN_EXTRA (mouse button 8)
+    #[serde(default = "default_show_overlay")]
+    pub show_overlay: bool,
 }
 
 fn default_enable_mouse() -> bool {
@@ -30,6 +32,10 @@ fn default_forward_button() -> u16 {
 
 fn default_backward_button() -> u16 {
     275 // BTN_EXTRA (backward button, mouse button 8)
+}
+
+fn default_show_overlay() -> bool {
+    true
 }
 
 impl Config {
@@ -90,6 +96,7 @@ impl Config {
             enable_mouse_buttons: true,
             forward_button: 276,  // BTN_SIDE (button 9)
             backward_button: 275, // BTN_EXTRA (button 8)
+            show_overlay: true,
         };
 
         // Save the generated config
@@ -119,6 +126,7 @@ impl Config {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            show_overlay: true,
         };
 
         if let Some(parent) = config_path.parent() {
@@ -152,6 +160,7 @@ mod tests {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            show_overlay: true,
         };
 
         // Height should be: 1080 - 40 = 1040
@@ -171,6 +180,7 @@ mod tests {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            show_overlay: true,
         };
 
         assert_eq!(config.eve_height_adjusted(), 1080);
@@ -189,6 +199,7 @@ mod tests {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            show_overlay: true,
         };
 
         let toml_str = toml::to_string(&config).unwrap();

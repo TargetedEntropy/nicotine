@@ -88,7 +88,7 @@ fn main() -> Result<()> {
                     // Start daemon in background thread
                     let wm_daemon = Arc::clone(&wm);
                     let config_daemon = config.clone();
-                    std::thread::spawn(move || {
+                    let daemon_thread = std::thread::spawn(move || {
                         let mut daemon = Daemon::new(wm_daemon, config_daemon);
                         if let Err(e) = daemon.run() {
                             eprintln!("Daemon error: {}", e);
@@ -98,17 +98,23 @@ fn main() -> Result<()> {
                     // Wait a bit for daemon to initialize
                     std::thread::sleep(std::time::Duration::from_millis(100));
 
-                    // Run overlay in main thread
-                    let state = Arc::new(Mutex::new(CycleState::new()));
-                    if let Ok(windows) = wm.get_eve_windows() {
-                        state.lock().unwrap().update_windows(windows);
-                    }
+                    if config.show_overlay {
+                        // Run overlay in main thread
+                        let state = Arc::new(Mutex::new(CycleState::new()));
+                        if let Ok(windows) = wm.get_eve_windows() {
+                            state.lock().unwrap().update_windows(windows);
+                        }
 
-                    if let Err(e) =
-                        run_overlay(wm, state, config.overlay_x, config.overlay_y, config)
-                    {
-                        eprintln!("Overlay error: {}", e);
-                        std::process::exit(1);
+                        if let Err(e) =
+                            run_overlay(wm, state, config.overlay_x, config.overlay_y, config)
+                        {
+                            eprintln!("Overlay error: {}", e);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        // No overlay - just keep daemon running
+                        println!("Overlay disabled - daemon running in background");
+                        daemon_thread.join().unwrap();
                     }
                 }
                 Err(e) => {
