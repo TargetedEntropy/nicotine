@@ -1,3 +1,5 @@
+use crate::config::Config;
+use crate::window_manager::{EveWindow, WindowManager};
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use x11rb::connection::Connection;
@@ -8,12 +10,6 @@ pub struct X11Manager {
     conn: Arc<RustConnection>,
     screen_num: usize,
     net_active_window_atom: Atom,
-}
-
-#[derive(Debug, Clone)]
-pub struct EveWindow {
-    pub id: u32,
-    pub title: String,
 }
 
 impl X11Manager {
@@ -125,7 +121,7 @@ impl X11Manager {
         Ok(())
     }
 
-    pub fn stack_windows(
+    pub fn stack_windows_internal(
         &self,
         windows: &[EveWindow],
         x: i32,
@@ -216,5 +212,36 @@ impl X11Manager {
         self.conn.configure_window(window_id, &values)?;
         self.conn.flush()?;
         Ok(())
+    }
+}
+
+impl WindowManager for X11Manager {
+    fn get_eve_windows(&self) -> Result<Vec<EveWindow>> {
+        self.get_eve_windows()
+    }
+
+    fn activate_window(&self, window_id: u32) -> Result<()> {
+        self.activate_window(window_id)
+    }
+
+    fn stack_windows(&self, windows: &[EveWindow], config: &Config) -> Result<()> {
+        let x = ((config.display_width - config.eve_width) / 2) as i32;
+        let y = 0;
+        let width = config.eve_width;
+        let height = config.display_height - config.panel_height;
+
+        self.stack_windows_internal(windows, x, y, width, height)
+    }
+
+    fn get_active_window(&self) -> Result<u32> {
+        self.get_active_window()
+    }
+
+    fn find_window_by_title(&self, title: &str) -> Result<Option<u32>> {
+        self.find_window_by_title(title)
+    }
+
+    fn move_window(&self, window_id: u32, x: i32, y: i32) -> Result<()> {
+        self.move_window(window_id, x, y)
     }
 }

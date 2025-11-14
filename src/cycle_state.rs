@@ -1,4 +1,4 @@
-use crate::x11_manager::{EveWindow, X11Manager};
+use crate::window_manager::{EveWindow, WindowManager};
 use anyhow::Result;
 
 pub struct CycleState {
@@ -22,18 +22,18 @@ impl CycleState {
         }
     }
 
-    pub fn cycle_forward(&mut self, x11: &X11Manager) -> Result<()> {
+    pub fn cycle_forward(&mut self, wm: &dyn WindowManager) -> Result<()> {
         if self.windows.is_empty() {
             return Ok(());
         }
 
         self.current_index = (self.current_index + 1) % self.windows.len();
         let window_id = self.windows[self.current_index].id;
-        x11.activate_window(window_id)?;
+        wm.activate_window(window_id)?;
         Ok(())
     }
 
-    pub fn cycle_backward(&mut self, x11: &X11Manager) -> Result<()> {
+    pub fn cycle_backward(&mut self, wm: &dyn WindowManager) -> Result<()> {
         if self.windows.is_empty() {
             return Ok(());
         }
@@ -45,7 +45,7 @@ impl CycleState {
         }
 
         let window_id = self.windows[self.current_index].id;
-        x11.activate_window(window_id)?;
+        wm.activate_window(window_id)?;
         Ok(())
     }
 

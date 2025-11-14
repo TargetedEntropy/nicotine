@@ -12,6 +12,24 @@ pub struct Config {
     pub eve_height: u32,
     pub overlay_x: f32,
     pub overlay_y: f32,
+    #[serde(default = "default_enable_mouse")]
+    pub enable_mouse_buttons: bool,
+    #[serde(default = "default_forward_button")]
+    pub forward_button: u16, // BTN_SIDE (mouse button 9)
+    #[serde(default = "default_backward_button")]
+    pub backward_button: u16, // BTN_EXTRA (mouse button 8)
+}
+
+fn default_enable_mouse() -> bool {
+    true
+}
+
+fn default_forward_button() -> u16 {
+    276 // BTN_SIDE (forward button, mouse button 9)
+}
+
+fn default_backward_button() -> u16 {
+    275 // BTN_EXTRA (backward button, mouse button 8)
 }
 
 impl Config {
@@ -69,6 +87,9 @@ impl Config {
             eve_height: display_height,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,  // BTN_SIDE (button 9)
+            backward_button: 275, // BTN_EXTRA (button 8)
         };
 
         // Save the generated config
@@ -95,6 +116,9 @@ impl Config {
             eve_height: display_height,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
         };
 
         if let Some(parent) = config_path.parent() {
@@ -133,6 +157,9 @@ mod tests {
             eve_height: 1080,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
         };
 
         // Window should be centered: (1920 - 1000) / 2 = 460
@@ -149,6 +176,9 @@ mod tests {
             eve_height: 1080,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
         };
 
         assert_eq!(config.eve_y(), 0);
@@ -164,6 +194,9 @@ mod tests {
             eve_height: 1080,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
         };
 
         // Height should be: 1080 - 40 = 1040
@@ -180,6 +213,9 @@ mod tests {
             eve_height: 1080,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
         };
 
         assert_eq!(config.eve_height_adjusted(), 1080);
@@ -195,6 +231,9 @@ mod tests {
             eve_height: 2160,
             overlay_x: 10.0,
             overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
         };
 
         let toml_str = toml::to_string(&config).unwrap();

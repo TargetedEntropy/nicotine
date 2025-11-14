@@ -1,10 +1,10 @@
 use crate::cycle_state::CycleState;
-use crate::x11_manager::X11Manager;
+use crate::window_manager::WindowManager;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
 pub struct OverlayApp {
-    x11: Arc<X11Manager>,
+    wm: Arc<dyn WindowManager>,
     state: Arc<Mutex<CycleState>>,
     config: crate::config::Config,
     drag_start_window_pos: Option<egui::Pos2>,
@@ -15,7 +15,7 @@ pub struct OverlayApp {
 impl OverlayApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
-        x11: Arc<X11Manager>,
+        wm: Arc<dyn WindowManager>,
         state: Arc<Mutex<CycleState>>,
         config: crate::config::Config,
     ) -> Self {
@@ -45,7 +45,7 @@ impl OverlayApp {
         cc.egui_ctx.set_fonts(fonts);
 
         Self {
-            x11,
+            wm,
             state,
             config,
             drag_start_window_pos: None,
@@ -61,10 +61,10 @@ impl eframe::App for OverlayApp {
         ctx.request_repaint();
 
         // Get active window
-        let active_window = self.x11.get_active_window().unwrap_or(0);
+        let active_window = self.wm.get_active_window().unwrap_or(0);
 
         // Update windows list and sync state
-        if let Ok(windows) = self.x11.get_eve_windows() {
+        if let Ok(windows) = self.wm.get_eve_windows() {
             let mut state = self.state.lock().unwrap();
             state.update_windows(windows);
             state.sync_with_active(active_window);
@@ -103,17 +103,11 @@ impl eframe::App for OverlayApp {
 
                 // Restack button
                 if ui.button("[R] Restack Windows").clicked() {
-                    let x11_clone = Arc::clone(&self.x11);
+                    let wm_clone = Arc::clone(&self.wm);
                     let config = self.config.clone();
                     std::thread::spawn(move || {
-                        if let Ok(windows) = x11_clone.get_eve_windows() {
-                            let _ = x11_clone.stack_windows(
-                                &windows,
-                                config.eve_x(),
-                                config.eve_y(),
-                                config.eve_width,
-                                config.eve_height_adjusted(),
-                            );
+                        if let Ok(windows) = wm_clone.get_eve_windows() {
+                            let _ = wm_clone.stack_windows(&windows, &config);
                         }
                     });
                 }
@@ -156,6 +150,8 @@ impl eframe::App for OverlayApp {
             });
 
         // Handle dragging with middle mouse button
+        // Note: Overlay dragging is X11-only. On Wayland, use your compositor's window
+        // management features to position the overlay window.
         let middle_down = ctx.input(|i| i.pointer.button_down(egui::PointerButton::Middle));
 
         if middle_down {
@@ -167,7 +163,7 @@ impl eframe::App for OverlayApp {
 
                     // Cache the window ID once at the start
                     if self.overlay_window_id.is_none() {
-                        if let Ok(Some(id)) = self.x11.find_window_by_title("Nicotine") {
+                        if let Ok(Some(id)) = self.wm.find_window_by_title("Nicotine") {
                             self.overlay_window_id = Some(id);
                         }
                     }
@@ -186,7 +182,7 @@ impl eframe::App for OverlayApp {
                     let new_x = (start_window.x + self.drag_accumulated.x) as i32;
                     let new_y = (start_window.y + self.drag_accumulated.y) as i32;
 
-                    let _ = self.x11.move_window(window_id, new_x, new_y);
+                    let _ = self.wm.move_window(window_id, new_x, new_y);
                 }
             }
 
@@ -204,7 +200,7 @@ impl eframe::App for OverlayApp {
 }
 
 pub fn run_overlay(
-    x11: Arc<X11Manager>,
+    wm: Arc<dyn WindowManager>,
     state: Arc<Mutex<CycleState>>,
     overlay_x: f32,
     overlay_y: f32,
@@ -225,15 +221,21 @@ pub fn run_overlay(
         "Nicotine",
         options,
         Box::new(move |cc| {
-            // Set X11 window properties after window is created
+            // Set window properties after window is created
             std::thread::spawn(|| {
-                std::thread::sleep(std::time::Duration::from_millis(300));
-                // Use wmctrl to set always on top
-                let _ = std::process::Command::new("wmctrl")
-                    .args(["-r", "Nicotine", "-b", "add,above"])
-                    .output();
+                // Try multiple times with increasing delays (window might not be ready immediately)
+                for delay in [300, 500, 1000] {
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                    if std::process::Command::new("wmctrl")
+                        .args(["-r", "Nicotine", "-b", "add,above,sticky"])
+                        .output()
+                        .is_ok()
+                    {
+                        break;
+                    }
+                }
             });
-            Ok(Box::new(OverlayApp::new(cc, x11, state, config)))
+            Ok(Box::new(OverlayApp::new(cc, wm, state, config)))
         }),
     )
 }

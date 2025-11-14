@@ -1,7 +1,10 @@
 mod config;
 mod cycle_state;
 mod daemon;
+mod mouse_listener;
 mod overlay;
+mod wayland_backends;
+mod window_manager;
 mod x11_manager;
 
 use anyhow::Result;
@@ -17,14 +20,60 @@ use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
 use std::sync::{Arc, Mutex};
+use wayland_backends::{HyprlandManager, KWinManager, SwayManager};
+use window_manager::{
+    detect_display_server, detect_wayland_compositor, DisplayServer, WaylandCompositor,
+    WindowManager,
+};
 use x11_manager::X11Manager;
+
+fn create_window_manager() -> Result<Arc<dyn WindowManager>> {
+    let display_server = detect_display_server();
+
+    match display_server {
+        DisplayServer::X11 => {
+            println!("Detected X11 display server");
+            Ok(Arc::new(X11Manager::new()?))
+        }
+        DisplayServer::Wayland => {
+            let compositor = detect_wayland_compositor();
+            println!(
+                "Detected Wayland display server with {:?} compositor",
+                compositor
+            );
+
+            match compositor {
+                WaylandCompositor::KDE => {
+                    println!("Using KDE/KWin backend");
+                    Ok(Arc::new(KWinManager::new()?))
+                }
+                WaylandCompositor::Sway => {
+                    println!("Using Sway backend");
+                    Ok(Arc::new(SwayManager::new()?))
+                }
+                WaylandCompositor::Hyprland => {
+                    println!("Using Hyprland backend");
+                    Ok(Arc::new(HyprlandManager::new()?))
+                }
+                WaylandCompositor::GNOME => {
+                    anyhow::bail!("GNOME Shell is not yet supported due to restrictive window management APIs")
+                }
+                WaylandCompositor::Other => {
+                    anyhow::bail!(
+                        "Unknown Wayland compositor. Supported: KDE Plasma, Sway, Hyprland"
+                    )
+                }
+            }
+        }
+    }
+}
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let command = args.get(1).map(|s| s.as_str()).unwrap_or("");
 
     let config = Config::load()?;
-    let x11 = Arc::new(X11Manager::new()?);
+    let wm = create_window_manager()?;
 
     match command {
         "start" => {
@@ -37,9 +86,10 @@ fn main() -> Result<()> {
                 Ok(_) => {
                     // We're now in the daemon process
                     // Start daemon in background thread
-                    let x11_daemon = Arc::clone(&x11);
+                    let wm_daemon = Arc::clone(&wm);
+                    let config_daemon = config.clone();
                     std::thread::spawn(move || {
-                        let mut daemon = Daemon::new(x11_daemon);
+                        let mut daemon = Daemon::new(wm_daemon, config_daemon);
                         if let Err(e) = daemon.run() {
                             eprintln!("Daemon error: {}", e);
                         }
@@ -50,12 +100,12 @@ fn main() -> Result<()> {
 
                     // Run overlay in main thread
                     let state = Arc::new(Mutex::new(CycleState::new()));
-                    if let Ok(windows) = x11.get_eve_windows() {
+                    if let Ok(windows) = wm.get_eve_windows() {
                         state.lock().unwrap().update_windows(windows);
                     }
 
                     if let Err(e) =
-                        run_overlay(x11, state, config.overlay_x, config.overlay_y, config)
+                        run_overlay(wm, state, config.overlay_x, config.overlay_y, config)
                     {
                         eprintln!("Overlay error: {}", e);
                         std::process::exit(1);
@@ -70,7 +120,7 @@ fn main() -> Result<()> {
 
         "daemon" => {
             println!("Starting EVE Multibox daemon...");
-            let mut daemon = Daemon::new(x11);
+            let mut daemon = Daemon::new(wm, config);
             daemon.run()?;
         }
 
@@ -79,11 +129,11 @@ fn main() -> Result<()> {
             let state = Arc::new(Mutex::new(CycleState::new()));
 
             // Initialize windows
-            if let Ok(windows) = x11.get_eve_windows() {
+            if let Ok(windows) = wm.get_eve_windows() {
                 state.lock().unwrap().update_windows(windows);
             }
 
-            if let Err(e) = run_overlay(x11, state, config.overlay_x, config.overlay_y, config) {
+            if let Err(e) = run_overlay(wm, state, config.overlay_x, config.overlay_y, config) {
                 eprintln!("Overlay error: {}", e);
                 std::process::exit(1);
             }
@@ -91,7 +141,7 @@ fn main() -> Result<()> {
 
         "stack" => {
             println!("Stacking EVE windows...");
-            let windows = x11.get_eve_windows()?;
+            let windows = wm.get_eve_windows()?;
 
             println!(
                 "Centering {} EVE clients ({}x{}) on {}x{} display",
@@ -102,13 +152,7 @@ fn main() -> Result<()> {
                 config.display_height
             );
 
-            x11.stack_windows(
-                &windows,
-                config.eve_x(),
-                config.eve_y(),
-                config.eve_width,
-                config.eve_height_adjusted(),
-            )?;
+            wm.stack_windows(&windows, &config)?;
 
             println!("✓ Stacked {} windows", windows.len());
         }
@@ -141,7 +185,7 @@ fn main() -> Result<()> {
             }
 
             let mut state = CycleState::new();
-            let windows = x11.get_eve_windows()?;
+            let windows = wm.get_eve_windows()?;
 
             if windows.is_empty() {
                 return Ok(());
@@ -150,11 +194,11 @@ fn main() -> Result<()> {
             state.update_windows(windows);
 
             // Sync with current active window
-            if let Ok(active) = x11.get_active_window() {
+            if let Ok(active) = wm.get_active_window() {
                 state.sync_with_active(active);
             }
 
-            state.cycle_forward(&x11)?;
+            state.cycle_forward(&*wm)?;
 
             // Lock is automatically released when file is dropped
         }
@@ -187,7 +231,7 @@ fn main() -> Result<()> {
             }
 
             let mut state = CycleState::new();
-            let windows = x11.get_eve_windows()?;
+            let windows = wm.get_eve_windows()?;
 
             if windows.is_empty() {
                 return Ok(());
@@ -196,11 +240,11 @@ fn main() -> Result<()> {
             state.update_windows(windows);
 
             // Sync with current active window
-            if let Ok(active) = x11.get_active_window() {
+            if let Ok(active) = wm.get_active_window() {
                 state.sync_with_active(active);
             }
 
-            state.cycle_backward(&x11)?;
+            state.cycle_backward(&*wm)?;
 
             // Lock is automatically released when file is dropped
         }

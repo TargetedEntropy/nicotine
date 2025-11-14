@@ -1,5 +1,7 @@
+use crate::config::Config;
 use crate::cycle_state::CycleState;
-use crate::x11_manager::X11Manager;
+use crate::mouse_listener::MouseListener;
+use crate::window_manager::WindowManager;
 use anyhow::Result;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -30,20 +32,21 @@ impl Command {
 }
 
 pub struct Daemon {
-    x11: Arc<X11Manager>,
+    wm: Arc<dyn WindowManager>,
     state: Arc<Mutex<CycleState>>,
+    config: Config,
 }
 
 impl Daemon {
-    pub fn new(x11: Arc<X11Manager>) -> Self {
+    pub fn new(wm: Arc<dyn WindowManager>, config: Config) -> Self {
         let state = Arc::new(Mutex::new(CycleState::new()));
 
         // Initialize windows
-        if let Ok(windows) = x11.get_eve_windows() {
+        if let Ok(windows) = wm.get_eve_windows() {
             state.lock().unwrap().update_windows(windows);
         }
 
-        Self { x11, state }
+        Self { wm, state, config }
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -53,12 +56,30 @@ impl Daemon {
         let listener = UnixListener::bind(SOCKET_PATH)?;
         println!("EVE Multibox daemon listening on {}", SOCKET_PATH);
 
+        // Start mouse event listener if enabled
+        if self.config.enable_mouse_buttons {
+            let mouse_listener = MouseListener::new(self.config.clone());
+            let wm_clone = Arc::clone(&self.wm);
+            let state_clone = Arc::clone(&self.state);
+
+            match mouse_listener.spawn(wm_clone, state_clone) {
+                Ok(_) => println!("Mouse button listener started"),
+                Err(e) => {
+                    eprintln!("Warning: Could not start mouse listener: {}", e);
+                    eprintln!(
+                        "Mouse buttons will not work. You can disable this warning by setting"
+                    );
+                    eprintln!("'enable_mouse_buttons = false' in ~/.config/nicotine/config.toml");
+                }
+            }
+        }
+
         // Refresh window list periodically in background
-        let x11_clone = Arc::clone(&self.x11);
+        let wm_clone = Arc::clone(&self.wm);
         let state_clone = Arc::clone(&self.state);
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_millis(500));
-            if let Ok(windows) = x11_clone.get_eve_windows() {
+            if let Ok(windows) = wm_clone.get_eve_windows() {
                 state_clone.lock().unwrap().update_windows(windows);
             }
         });
@@ -90,24 +111,24 @@ impl Daemon {
                     let mut state = self.state.lock().unwrap();
 
                     // Sync with active window first
-                    if let Ok(active) = self.x11.get_active_window() {
+                    if let Ok(active) = self.wm.get_active_window() {
                         state.sync_with_active(active);
                     }
 
-                    state.cycle_forward(&self.x11)?;
+                    state.cycle_forward(&*self.wm)?;
                 }
                 Command::Backward => {
                     let mut state = self.state.lock().unwrap();
 
                     // Sync with active window first
-                    if let Ok(active) = self.x11.get_active_window() {
+                    if let Ok(active) = self.wm.get_active_window() {
                         state.sync_with_active(active);
                     }
 
-                    state.cycle_backward(&self.x11)?;
+                    state.cycle_backward(&*self.wm)?;
                 }
                 Command::Refresh => {
-                    let windows = self.x11.get_eve_windows()?;
+                    let windows = self.wm.get_eve_windows()?;
                     self.state.lock().unwrap().update_windows(windows);
                 }
                 Command::Quit => {
