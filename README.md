@@ -197,4 +197,4 @@ cargo build --release
 
 ## License
 
-MIT
+See [LICENSE](LICENSE.md)
