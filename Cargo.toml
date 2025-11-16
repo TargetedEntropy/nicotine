@@ -1,6 +1,6 @@
 [package]
 name = "nicotine"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "High-performance EVE Online multiboxing tool for Linux (X11 & Wayland)"
 license = "MIT"
@@ -18,3 +18,4 @@ dirs = "5.0"
 daemonize = "0.5"
 nix = { version = "0.29", features = ["fs"] }
 evdev = "0.12"
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }

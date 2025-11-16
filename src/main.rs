@@ -3,6 +3,7 @@ mod cycle_state;
 mod daemon;
 mod mouse_listener;
 mod overlay;
+mod version_check;
 mod wayland_backends;
 mod window_manager;
 mod x11_manager;
@@ -78,6 +79,11 @@ fn main() -> Result<()> {
     match command {
         "start" => {
             println!("Starting Nicotine 🚬");
+
+            // Check for updates (non-blocking, silent on errors)
+            if let Ok(Some((new_version, url))) = version_check::check_for_updates() {
+                version_check::print_update_notification(&new_version, &url);
+            }
 
             // Daemonize the process (safe Rust wrapper)
             let daemonize = Daemonize::new().working_directory("/tmp").umask(0o027);
@@ -276,7 +282,11 @@ fn main() -> Result<()> {
         }
 
         _ => {
-            println!("Nicotine - EVE Online Multiboxing Tool");
+            println!();
+            println!("🚬 N I C O T I N E 🚬");
+            println!();
+            println!("Questions or suggestions?");
+            println!("Reach out to isomerc on Discord or open a Github issue");
             println!();
             println!("Usage:");
             println!("  nicotine start         - Start everything (daemon + overlay)");
