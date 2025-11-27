@@ -126,6 +126,68 @@ impl CycleState {
             }
         }
     }
+
+    /// Switch to a specific target number (1-indexed)
+    /// If character_order is provided, uses that to map target -> character name
+    /// Otherwise falls back to window list order
+    pub fn switch_to(
+        &mut self,
+        target: usize,
+        wm: &dyn WindowManager,
+        minimize_inactive: bool,
+        character_order: Option<&[String]>,
+    ) -> Result<()> {
+        if self.windows.is_empty() || target == 0 {
+            return Ok(());
+        }
+
+        let target_index = if let Some(characters) = character_order {
+            // Use character order from characters.txt
+            let target_idx = target - 1; // Convert to 0-indexed
+            if target_idx >= characters.len() {
+                anyhow::bail!("Target {} is out of range (only {} characters configured)", target, characters.len());
+            }
+
+            let target_name = &characters[target_idx];
+
+            // Find window matching this character name
+            self.windows
+                .iter()
+                .position(|w| w.title == *target_name)
+                .ok_or_else(|| anyhow::anyhow!("Character '{}' not found in active windows", target_name))?
+        } else {
+            // Fall back to window list order
+            let target_idx = target - 1; // Convert to 0-indexed
+            if target_idx >= self.windows.len() {
+                anyhow::bail!("Target {} is out of range (only {} windows)", target, self.windows.len());
+            }
+            target_idx
+        };
+
+        // Don't do anything if already on target
+        if target_index == self.current_index {
+            return Ok(());
+        }
+
+        let previous_index = self.current_index;
+        self.current_index = target_index;
+        self.write_index();
+
+        let new_window_id = self.windows[self.current_index].id;
+
+        if minimize_inactive {
+            let _ = wm.restore_window(new_window_id);
+        }
+
+        wm.activate_window(new_window_id)?;
+
+        if minimize_inactive {
+            let previous_window_id = self.windows[previous_index].id;
+            let _ = wm.minimize_window(previous_window_id);
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -286,5 +348,179 @@ mod tests {
 
         // Index should stay at 2 since it's still valid
         assert_eq!(state.get_current_index(), 2);
+    }
+
+    // Mock WindowManager for testing switch_to
+    struct MockWindowManager {
+        activated_windows: std::sync::Mutex<Vec<u32>>,
+    }
+
+    impl MockWindowManager {
+        fn new() -> Self {
+            Self {
+                activated_windows: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+
+        fn get_activated(&self) -> Vec<u32> {
+            self.activated_windows.lock().unwrap().clone()
+        }
+    }
+
+    impl WindowManager for MockWindowManager {
+        fn get_eve_windows(&self) -> anyhow::Result<Vec<EveWindow>> {
+            Ok(vec![])
+        }
+
+        fn activate_window(&self, window_id: u32) -> anyhow::Result<()> {
+            self.activated_windows.lock().unwrap().push(window_id);
+            Ok(())
+        }
+
+        fn stack_windows(
+            &self,
+            _windows: &[EveWindow],
+            _config: &crate::config::Config,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn get_active_window(&self) -> anyhow::Result<u32> {
+            Ok(0)
+        }
+
+        fn find_window_by_title(&self, _title: &str) -> anyhow::Result<Option<u32>> {
+            Ok(None)
+        }
+
+        fn minimize_window(&self, _window_id: u32) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn restore_window(&self, _window_id: u32) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_switch_to_by_index_no_character_order() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+            create_test_window(300, "Gamma"),
+        ];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        // Switch to target 2 (0-indexed: 1)
+        state.switch_to(2, &wm, false, None).unwrap();
+        assert_eq!(state.get_current_index(), 1);
+        assert_eq!(wm.get_activated(), vec![200]);
+    }
+
+    #[test]
+    fn test_switch_to_with_character_order() {
+        let mut state = CycleState::new();
+        // Windows in random order
+        let windows = vec![
+            create_test_window(100, "Gamma"),
+            create_test_window(200, "Alpha"),
+            create_test_window(300, "Beta"),
+        ];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        // Character order defines: 1=Alpha, 2=Beta, 3=Gamma
+        let char_order = vec!["Alpha".to_string(), "Beta".to_string(), "Gamma".to_string()];
+
+        // Switch to target 1 (Alpha) - should find window 200
+        state.switch_to(1, &wm, false, Some(&char_order)).unwrap();
+        assert_eq!(state.get_current_index(), 1); // Index of Alpha in windows
+        assert_eq!(wm.get_activated(), vec![200]);
+    }
+
+    #[test]
+    fn test_switch_to_same_window_does_nothing() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+        ];
+        state.update_windows(windows);
+        state.current_index = 0;
+
+        let wm = MockWindowManager::new();
+
+        // Switch to target 1 when already on index 0
+        state.switch_to(1, &wm, false, None).unwrap();
+
+        // Should not have activated anything
+        assert!(wm.get_activated().is_empty());
+    }
+
+    #[test]
+    fn test_switch_to_out_of_range() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+        ];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        // Switch to target 5 when only 2 windows exist
+        let result = state.switch_to(5, &wm, false, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_switch_to_character_not_logged_in() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+        ];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        // Character order includes a character not in windows
+        let char_order = vec![
+            "Alpha".to_string(),
+            "Beta".to_string(),
+            "Gamma".to_string(),
+        ];
+
+        // Switch to target 3 (Gamma) - not logged in
+        let result = state.switch_to(3, &wm, false, Some(&char_order));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_switch_to_zero_does_nothing() {
+        let mut state = CycleState::new();
+        let windows = vec![create_test_window(100, "Alpha")];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        // Switch to target 0 should do nothing
+        state.switch_to(0, &wm, false, None).unwrap();
+        assert!(wm.get_activated().is_empty());
+    }
+
+    #[test]
+    fn test_switch_to_empty_windows_does_nothing() {
+        let mut state = CycleState::new();
+
+        let wm = MockWindowManager::new();
+
+        // Switch with no windows
+        state.switch_to(1, &wm, false, None).unwrap();
+        assert!(wm.get_activated().is_empty());
     }
 }

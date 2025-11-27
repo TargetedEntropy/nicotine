@@ -15,18 +15,28 @@ const SOCKET_PATH: &str = "/tmp/nicotine.sock";
 pub enum Command {
     Forward,
     Backward,
+    Switch(usize),
     Refresh,
     Quit,
 }
 
 impl Command {
     pub fn from_str(s: &str) -> Option<Self> {
-        match s.trim() {
+        let s = s.trim();
+        match s {
             "forward" => Some(Command::Forward),
             "backward" => Some(Command::Backward),
             "refresh" => Some(Command::Refresh),
             "quit" => Some(Command::Quit),
-            _ => None,
+            _ => {
+                // Check for switch:N format
+                if let Some(num_str) = s.strip_prefix("switch:") {
+                    if let Ok(num) = num_str.parse::<usize>() {
+                        return Some(Command::Switch(num));
+                    }
+                }
+                None
+            }
         }
     }
 }
@@ -35,6 +45,7 @@ pub struct Daemon {
     wm: Arc<dyn WindowManager>,
     state: Arc<Mutex<CycleState>>,
     config: Config,
+    character_order: Option<Vec<String>>,
 }
 
 impl Daemon {
@@ -46,7 +57,18 @@ impl Daemon {
             state.lock().unwrap().update_windows(windows);
         }
 
-        Self { wm, state, config }
+        // Load character order for targeted cycling
+        let character_order = Config::load_characters();
+        if character_order.is_some() {
+            println!("Loaded character order from characters.txt");
+        }
+
+        Self {
+            wm,
+            state,
+            config,
+            character_order,
+        }
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -126,6 +148,21 @@ impl Daemon {
                     }
 
                     state.cycle_backward(&*self.wm, self.config.minimize_inactive)?;
+                }
+                Command::Switch(target) => {
+                    let mut state = self.state.lock().unwrap();
+
+                    // Sync with active window first
+                    if let Ok(active) = self.wm.get_active_window() {
+                        state.sync_with_active(active);
+                    }
+
+                    state.switch_to(
+                        target,
+                        &*self.wm,
+                        self.config.minimize_inactive,
+                        self.character_order.as_deref(),
+                    )?;
                 }
                 Command::Refresh => {
                     let windows = self.wm.get_eve_windows()?;

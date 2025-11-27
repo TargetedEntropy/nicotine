@@ -51,11 +51,36 @@ fn default_minimize_inactive() -> bool {
 }
 
 impl Config {
-    fn config_path() -> PathBuf {
+    fn config_dir() -> PathBuf {
         let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
         path.push("nicotine");
+        path
+    }
+
+    fn config_path() -> PathBuf {
+        let mut path = Self::config_dir();
         path.push("config.toml");
         path
+    }
+
+    /// Load character order from characters.txt
+    /// Each line is a character name (without "EVE - " prefix)
+    /// Returns None if file doesn't exist
+    pub fn load_characters() -> Option<Vec<String>> {
+        let mut path = Self::config_dir();
+        path.push("characters.txt");
+
+        if !path.exists() {
+            return None;
+        }
+
+        fs::read_to_string(&path).ok().map(|contents| {
+            contents
+                .lines()
+                .map(|line| line.trim().to_string())
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .collect()
+        })
     }
 
     fn detect_display_size() -> (u32, u32) {

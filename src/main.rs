@@ -281,27 +281,84 @@ fn main() -> Result<()> {
             Config::save_default()?;
         }
 
-        _ => {
-            println!();
-            println!("🚬 N I C O T I N E 🚬");
-            println!();
-            println!("Questions or suggestions?");
-            println!("Reach out to isomerc on Discord or open a Github issue");
-            println!();
-            println!("Usage:");
-            println!("  nicotine start         - Start everything (daemon + overlay)");
-            println!("  nicotine stop          - Stop all Nicotine processes");
-            println!("  nicotine stack         - Stack all EVE windows");
-            println!("  nicotine forward       - Cycle forward");
-            println!("  nicotine backward      - Cycle backward");
-            println!("  nicotine init-config   - Create default config.toml");
-            println!();
-            println!("Advanced:");
-            println!("  nicotine daemon        - Start daemon only");
-            println!("  nicotine overlay       - Start overlay only");
-            println!();
-            println!("Quick start:");
-            println!("  nicotine start         # Starts in background automatically");
+        // Handle switch command or numeric shorthand
+        cmd => {
+            // Check for "switch N" format
+            let target = if cmd == "switch" {
+                args.get(2).and_then(|s| s.parse::<usize>().ok())
+            } else {
+                // Check if it's just a number (shorthand)
+                cmd.parse::<usize>().ok()
+            };
+
+            if let Some(target) = target {
+                // Try daemon first
+                if daemon::send_command(&format!("switch:{}", target)).is_ok() {
+                    return Ok(());
+                }
+
+                // Fallback to direct mode
+                let lock_file = "/tmp/nicotine-cycle.lock";
+                let file = match OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o644)
+                    .open(lock_file)
+                {
+                    Ok(f) => f,
+                    Err(_) => return Ok(()),
+                };
+
+                #[allow(deprecated)]
+                if flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).is_err() {
+                    return Ok(());
+                }
+
+                let mut state = CycleState::new();
+                let windows = wm.get_eve_windows()?;
+
+                if windows.is_empty() {
+                    return Ok(());
+                }
+
+                state.update_windows(windows);
+
+                if let Ok(active) = wm.get_active_window() {
+                    state.sync_with_active(active);
+                }
+
+                let character_order = Config::load_characters();
+                state.switch_to(
+                    target,
+                    &*wm,
+                    config.minimize_inactive,
+                    character_order.as_deref(),
+                )?;
+            } else {
+                println!();
+                println!("🚬 N I C O T I N E 🚬");
+                println!();
+                println!("Questions or suggestions?");
+                println!("Reach out to isomerc on Discord or open a Github issue");
+                println!();
+                println!("Usage:");
+                println!("  nicotine start         - Start everything (daemon + overlay)");
+                println!("  nicotine stop          - Stop all Nicotine processes");
+                println!("  nicotine stack         - Stack all EVE windows");
+                println!("  nicotine forward       - Cycle forward");
+                println!("  nicotine backward      - Cycle backward");
+                println!("  nicotine switch N      - Switch to client N (targeted cycling)");
+                println!("  nicotine N             - Shorthand for switch N");
+                println!("  nicotine init-config   - Create default config.toml");
+                println!();
+                println!("Advanced:");
+                println!("  nicotine daemon        - Start daemon only");
+                println!("  nicotine overlay       - Start overlay only");
+                println!();
+                println!("Quick start:");
+                println!("  nicotine start         # Starts in background automatically");
+            }
         }
     }
 
