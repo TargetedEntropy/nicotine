@@ -21,7 +21,6 @@ impl OverlayApp {
         state: Arc<Mutex<CycleState>>,
         config: crate::config::Config,
     ) -> Self {
-        // Load embedded JetBrains Mono font
         let mut fonts = egui::FontDefinitions::default();
 
         fonts.font_data.insert(
@@ -31,7 +30,11 @@ impl OverlayApp {
             )),
         );
 
-        // Set JetBrains Mono as the default font
+        fonts.font_data.insert(
+            "logo_font".to_owned(),
+            egui::FontData::from_static(include_bytes!("../assets/fonts/Marlboro.ttf")),
+        );
+
         fonts
             .families
             .entry(egui::FontFamily::Proportional)
@@ -43,6 +46,12 @@ impl OverlayApp {
             .entry(egui::FontFamily::Monospace)
             .or_default()
             .insert(0, "jetbrains_mono".to_owned());
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Name("logo".into()))
+            .or_default()
+            .push("logo_font".to_owned());
 
         cc.egui_ctx.set_fonts(fonts);
 
@@ -74,86 +83,110 @@ impl eframe::App for OverlayApp {
                 if let Ok(active) = self.wm.get_active_window() {
                     state.sync_with_active(active);
                 }
+
+                // Resize window based on client count
+                let client_count = state.get_windows().len();
+                let base_height = 320.0_f32;
+                let per_client = 20.0_f32;
+                let min_clients = 10;
+                let extra_clients = client_count.saturating_sub(min_clients);
+                let target_height = base_height + (extra_clients as f32 * per_client);
+
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                    220.0,
+                    target_height,
+                )));
             }
         }
+
+        let red = egui::Color32::from_rgb(196, 30, 58);
+        let gold = egui::Color32::from_rgb(180, 155, 105);
+        let cream = egui::Color32::from_rgb(252, 250, 242);
+        let black = egui::Color32::from_rgb(30, 30, 30);
 
         let _panel_response = egui::CentralPanel::default()
             .frame(
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgba_unmultiplied(0, 0, 0, 200))
-                    .rounding(5.0)
-                    .inner_margin(10.0),
+                    .fill(cream)
+                    .rounding(0.0)
+                    .inner_margin(0.0)
+                    .stroke(egui::Stroke::new(2.0, gold)),
             )
             .show(ctx, |ui| {
-                // Header
-                ui.horizontal(|ui| {
-                    ui.colored_label(
-                        egui::Color32::from_rgb(0, 255, 0),
-                        egui::RichText::new("🚬 NICOTINE 🚬").strong(),
+                // Red top bar
+                let rect = ui.available_rect_before_wrap();
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), 44.0)),
+                    0.0,
+                    red,
+                );
+
+                // NICOTINE text in red bar
+                ui.add_space(10.0);
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new("Nicotine")
+                            .family(egui::FontFamily::Name("logo".into()))
+                            .size(32.0)
+                            .color(cream),
                     );
                 });
 
-                ui.add_space(5.0);
+                ui.add_space(16.0);
 
-                // Status
-                ui.horizontal(|ui| {
-                    ui.label("Daemon:");
-                    let daemon_running = std::path::Path::new("/tmp/nicotine.sock").exists();
-                    if daemon_running {
-                        ui.colored_label(egui::Color32::from_rgb(0, 255, 0), "[*] Running");
-                    } else {
-                        ui.colored_label(egui::Color32::from_rgb(255, 0, 0), "[X] Stopped");
-                    }
-                });
+                // Client list
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(16.0, 0.0))
+                    .show(ui, |ui| {
+                        let state = self.state.lock().unwrap();
+                        let windows = state.get_windows();
+                        let current_index = state.get_current_index();
 
-                ui.add_space(5.0);
+                        for (i, window) in windows.iter().enumerate() {
+                            let is_active = i == current_index;
+                            let display_title = &window.title[..window.title.len().min(20)];
 
-                // Restack button
-                if ui.button("[R] Restack Windows").clicked() {
-                    let wm_clone = Arc::clone(&self.wm);
-                    let config = self.config.clone();
-                    std::thread::spawn(move || {
-                        if let Ok(windows) = wm_clone.get_eve_windows() {
-                            let _ = wm_clone.stack_windows(&windows, &config);
+                            let text_color = if is_active { red } else { black };
+                            let prefix = if is_active { "▸ " } else { "  " };
+
+                            ui.colored_label(
+                                text_color,
+                                egui::RichText::new(format!("{}{}", prefix, display_title))
+                                    .size(13.0)
+                                    .strong(),
+                            );
+                            ui.add_space(2.0);
+                        }
+
+                        if windows.is_empty() {
+                            ui.add_space(10.0);
+                            ui.vertical_centered(|ui| {
+                                ui.colored_label(gold, "No clients");
+                            });
                         }
                     });
-                }
 
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(5.0);
+                // Bottom button
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                    ui.add_space(10.0);
 
-                // Window list
-                let state = self.state.lock().unwrap();
-                let windows = state.get_windows();
-                let current_index = state.get_current_index();
+                    let button =
+                        egui::Button::new(egui::RichText::new("RESTACK").color(cream).size(12.0))
+                            .fill(red)
+                            .rounding(2.0);
 
-                ui.label(format!("Clients: {}", windows.len()));
-                ui.add_space(5.0);
+                    if ui.add(button).clicked() {
+                        let wm_clone = Arc::clone(&self.wm);
+                        let config = self.config.clone();
+                        std::thread::spawn(move || {
+                            if let Ok(windows) = wm_clone.get_eve_windows() {
+                                let _ = wm_clone.stack_windows(&windows, &config);
+                            }
+                        });
+                    }
 
-                for (i, window) in windows.iter().enumerate() {
-                    let text = if i == current_index {
-                        format!(
-                            "> [{}] {}",
-                            i + 1,
-                            &window.title[..window.title.len().min(20)]
-                        )
-                    } else {
-                        format!(
-                            "  [{}] {}",
-                            i + 1,
-                            &window.title[..window.title.len().min(20)]
-                        )
-                    };
-
-                    ui.monospace(text);
-                }
-
-                if windows.is_empty() {
-                    ui.colored_label(egui::Color32::GRAY, "No EVE clients detected");
-                    ui.add_space(5.0);
-                    ui.label("Launch EVE clients to begin");
-                }
+                    ui.add_space(6.0);
+                });
             });
 
         // Handle dragging with middle mouse button
@@ -215,12 +248,13 @@ pub fn run_overlay(
 ) -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([280.0, 450.0])
+            .with_inner_size([220.0, 320.0])
+            .with_min_inner_size([220.0, 320.0])
             .with_position([overlay_x, overlay_y])
             .with_decorations(false)
             .with_always_on_top()
             .with_transparent(true)
-            .with_resizable(false),
+            .with_resizable(true),
         ..Default::default()
     };
 
