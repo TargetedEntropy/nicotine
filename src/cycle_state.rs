@@ -1,5 +1,9 @@
 use crate::window_manager::{EveWindow, WindowManager};
 use anyhow::Result;
+use std::fs;
+use std::path::Path;
+
+const INDEX_FILE: &str = "/tmp/nicotine-index";
 
 pub struct CycleState {
     current_index: usize,
@@ -28,6 +32,7 @@ impl CycleState {
         }
 
         self.current_index = (self.current_index + 1) % self.windows.len();
+        self.write_index();
         let window_id = self.windows[self.current_index].id;
         wm.activate_window(window_id)?;
         Ok(())
@@ -44,9 +49,24 @@ impl CycleState {
             self.current_index -= 1;
         }
 
+        self.write_index();
         let window_id = self.windows[self.current_index].id;
         wm.activate_window(window_id)?;
         Ok(())
+    }
+
+    fn write_index(&self) {
+        let _ = fs::write(INDEX_FILE, self.current_index.to_string());
+    }
+
+    pub fn read_index_from_file() -> Option<usize> {
+        if Path::new(INDEX_FILE).exists() {
+            fs::read_to_string(INDEX_FILE)
+                .ok()
+                .and_then(|s| s.trim().parse().ok())
+        } else {
+            None
+        }
     }
 
     pub fn get_windows(&self) -> &[EveWindow] {
@@ -55,6 +75,12 @@ impl CycleState {
 
     pub fn get_current_index(&self) -> usize {
         self.current_index
+    }
+
+    pub fn set_current_index(&mut self, index: usize) {
+        if index < self.windows.len() || self.windows.is_empty() {
+            self.current_index = index;
+        }
     }
 
     pub fn sync_with_active(&mut self, active_window: u32) {

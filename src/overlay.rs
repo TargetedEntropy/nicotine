@@ -12,6 +12,7 @@ pub struct OverlayApp {
     drag_accumulated: egui::Vec2,
     overlay_window_id: Option<u32>,
     last_sync: Instant,
+    last_index: usize,
 }
 
 impl OverlayApp {
@@ -63,6 +64,7 @@ impl OverlayApp {
             drag_accumulated: egui::Vec2::ZERO,
             overlay_window_id: None,
             last_sync: Instant::now(),
+            last_index: 0,
         }
     }
 }
@@ -72,17 +74,23 @@ impl eframe::App for OverlayApp {
         // Request repaint for smooth updates
         ctx.request_repaint();
 
+        // Read current index from file (instant, no process spawning)
+        if let Some(index) = CycleState::read_index_from_file() {
+            if index != self.last_index {
+                self.last_index = index;
+                let mut state = self.state.lock().unwrap();
+                state.set_current_index(index);
+            }
+        }
+
+        // Periodic full sync for window list updates (new clients, etc)
         let now = Instant::now();
-        if now.duration_since(self.last_sync).as_millis() >= 50 {
+        if now.duration_since(self.last_sync).as_millis() >= 500 {
             self.last_sync = now;
 
             if let Ok(windows) = self.wm.get_eve_windows() {
                 let mut state = self.state.lock().unwrap();
                 state.update_windows(windows);
-
-                if let Ok(active) = self.wm.get_active_window() {
-                    state.sync_with_active(active);
-                }
 
                 // Resize window based on client count
                 let client_count = state.get_windows().len();
