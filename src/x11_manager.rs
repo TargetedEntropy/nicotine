@@ -98,17 +98,17 @@ impl X11Manager {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
 
-        // Use pre-cached atom (no roundtrip!)
+        let current_active = self.get_active_window().unwrap_or(0);
+
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
             sequence: 0,
             window: window_id,
             type_: self.net_active_window_atom,
-            data: ClientMessageData::from([2, 0, 0, 0, 0]),
+            data: ClientMessageData::from([2, x11rb::CURRENT_TIME, current_active, 0, 0]),
         };
 
-        // Fire and forget - send_event doesn't block
         self.conn.send_event(
             false,
             root,
@@ -116,7 +116,9 @@ impl X11Manager {
             event,
         )?;
 
-        // Flush pushes to X11 but doesn't wait for processing
+        self.conn
+            .set_input_focus(InputFocus::PARENT, window_id, x11rb::CURRENT_TIME)?;
+
         self.conn.flush()?;
         Ok(())
     }

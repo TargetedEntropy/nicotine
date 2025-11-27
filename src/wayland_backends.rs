@@ -12,7 +12,6 @@ pub struct KWinManager;
 
 impl KWinManager {
     pub fn new() -> Result<Self> {
-        // Verify wmctrl is available (KDE Plasma provides XWayland support)
         Command::new("wmctrl")
             .arg("-m")
             .output()
@@ -22,8 +21,6 @@ impl KWinManager {
     }
 
     fn get_all_windows(&self) -> Result<Vec<(String, String)>> {
-        // Use wmctrl to list windows (works through XWayland)
-        // Returns Vec<(window_id, title)>
         let output = Command::new("wmctrl")
             .arg("-l")
             .output()
@@ -36,17 +33,34 @@ impl KWinManager {
         let mut windows = Vec::new();
         let lines = String::from_utf8_lossy(&output.stdout);
 
-        // wmctrl -l output format: "0x06e00008  0 atlantis EVE - Homeless Addict"
         for line in lines.lines() {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 4 {
-                let window_id = parts[0]; // e.g., "0x06e00008"
-                let title = parts[3..].join(" "); // Join everything after desktop and hostname
+                let window_id = parts[0];
+                let title = parts[3..].join(" ");
                 windows.push((window_id.to_string(), title));
             }
         }
 
         Ok(windows)
+    }
+
+    fn get_window_title_by_id(&self, hex_id: &str) -> Option<String> {
+        let output = Command::new("wmctrl").arg("-l").output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let lines = String::from_utf8_lossy(&output.stdout);
+        for line in lines.lines() {
+            if line.starts_with(hex_id) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    return Some(parts[3..].join(" "));
+                }
+            }
+        }
+        None
     }
 }
 
@@ -77,22 +91,23 @@ impl WindowManager for KWinManager {
     }
 
     fn activate_window(&self, window_id: u32) -> Result<()> {
-        // Convert u32 back to hex format for wmctrl
         let hex_id = format!("0x{:08x}", window_id);
 
-        let output = Command::new("wmctrl")
-            .arg("-i")
-            .arg("-a")
-            .arg(&hex_id)
+        if let Some(title) = self.get_window_title_by_id(&hex_id) {
+            if Command::new("kdotool")
+                .args(["search", "--name", &title, "windowactivate"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                return Ok(());
+            }
+        }
+
+        Command::new("wmctrl")
+            .args(["-i", "-a", &hex_id])
             .output()
             .context("Failed to activate window")?;
-
-        if !output.status.success() {
-            anyhow::bail!(
-                "Failed to activate window: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
 
         Ok(())
     }

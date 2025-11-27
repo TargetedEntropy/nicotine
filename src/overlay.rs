@@ -2,6 +2,7 @@ use crate::cycle_state::CycleState;
 use crate::window_manager::WindowManager;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 pub struct OverlayApp {
     wm: Arc<dyn WindowManager>,
@@ -10,6 +11,7 @@ pub struct OverlayApp {
     drag_start_window_pos: Option<egui::Pos2>,
     drag_accumulated: egui::Vec2,
     overlay_window_id: Option<u32>,
+    last_sync: Instant,
 }
 
 impl OverlayApp {
@@ -51,6 +53,7 @@ impl OverlayApp {
             drag_start_window_pos: None,
             drag_accumulated: egui::Vec2::ZERO,
             overlay_window_id: None,
+            last_sync: Instant::now(),
         }
     }
 }
@@ -60,14 +63,18 @@ impl eframe::App for OverlayApp {
         // Request repaint for smooth updates
         ctx.request_repaint();
 
-        // Get active window
-        let active_window = self.wm.get_active_window().unwrap_or(0);
+        let now = Instant::now();
+        if now.duration_since(self.last_sync).as_millis() >= 50 {
+            self.last_sync = now;
 
-        // Update windows list and sync state
-        if let Ok(windows) = self.wm.get_eve_windows() {
-            let mut state = self.state.lock().unwrap();
-            state.update_windows(windows);
-            state.sync_with_active(active_window);
+            if let Ok(windows) = self.wm.get_eve_windows() {
+                let mut state = self.state.lock().unwrap();
+                state.update_windows(windows);
+
+                if let Ok(active) = self.wm.get_active_window() {
+                    state.sync_with_active(active);
+                }
+            }
         }
 
         let _panel_response = egui::CentralPanel::default()
