@@ -10,7 +10,7 @@ High-performance EVE Online multiboxing tool for Linux (X11 & Wayland), inspired
 
 ## Features
 
-- **Instant client cycling** with mouse buttons (forward/backward)
+- **Instant client cycling** with mouse buttons (forward/backward) or targeted switching (jump to client N)
 - **Always-on-top overlay** showing all clients and their status
 - **Daemon architecture** for near-zero-latency window switching
 - **Auto-stack windows** to perfectly center multiple EVE clients
@@ -61,7 +61,21 @@ nicotine stop           # Stop all Nicotine processes
 nicotine stack          # Stack all EVE windows
 nicotine forward        # Cycle to next client
 nicotine backward       # Cycle to previous client
+nicotine 1              # Jump to client 1
+nicotine 2              # Jump to client 2
 ```
+
+### Targeted Cycling
+
+By default, `nicotine 1`, `nicotine 2`, etc. use window detection order. To define your own order, create `~/.config/nicotine/characters.txt`:
+
+```
+Main Character
+Alt One
+Alt Two
+```
+
+Each line is a character name (without "EVE - " prefix). Line 1 = target 1, line 2 = target 2, etc. Bind these commands to hotkeys in your desktop environment for quick access.
 
 ### Mouse Bindings
 
