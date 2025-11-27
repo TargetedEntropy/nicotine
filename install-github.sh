@@ -4,7 +4,7 @@
 
 set -e
 
-REPO="isomerc/nicotine" # Update this with your GitHub username
+REPO="isomerc/nicotine"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="nicotine"
 
@@ -26,26 +26,38 @@ aarch64 | arm64)
   ;;
 esac
 
-echo "[1/4] Detecting latest release..."
-LATEST_URL=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*nicotine-linux-$ARCH\"" | cut -d '"' -f 4)
+echo "[1/5] Detecting latest release..."
+RELEASE_INFO=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest")
+BINARY_URL=$(echo "$RELEASE_INFO" | grep "browser_download_url.*nicotine-linux-$ARCH\"" | cut -d '"' -f 4)
+ICON_URL=$(echo "$RELEASE_INFO" | grep "browser_download_url.*icon.png\"" | cut -d '"' -f 4)
+DESKTOP_URL=$(echo "$RELEASE_INFO" | grep "browser_download_url.*nicotine.desktop\"" | cut -d '"' -f 4)
 
-if [ -z "$LATEST_URL" ]; then
+if [ -z "$BINARY_URL" ]; then
   echo "Error: Could not find release for linux-$ARCH"
-  echo "Looking for: nicotine-linux-$ARCH"
   exit 1
 fi
 
-echo "[2/4] Downloading nicotine..."
+echo "[2/5] Downloading nicotine..."
 mkdir -p "$INSTALL_DIR"
-curl -sL "$LATEST_URL" -o "/tmp/$BINARY_NAME"
+curl -sL "$BINARY_URL" -o "/tmp/$BINARY_NAME"
 chmod +x "/tmp/$BINARY_NAME"
-
-echo "[3/4] Installing to $INSTALL_DIR..."
 mv "/tmp/$BINARY_NAME" "$INSTALL_DIR/"
+
+echo "[3/5] Installing desktop file and icon..."
+mkdir -p ~/.local/share/applications
+mkdir -p ~/.local/share/icons/hicolor/256x256/apps
+if [ -n "$ICON_URL" ]; then
+  curl -sL "$ICON_URL" -o ~/.local/share/icons/hicolor/256x256/apps/nicotine.png
+fi
+if [ -n "$DESKTOP_URL" ]; then
+  curl -sL "$DESKTOP_URL" -o ~/.local/share/applications/nicotine.desktop
+fi
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
 
 # Add to PATH if needed
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-  echo "[4/4] Adding $INSTALL_DIR to PATH..."
+  echo "[4/5] Adding $INSTALL_DIR to PATH..."
   SHELL_RC=""
   if [ -n "$BASH_VERSION" ]; then
     SHELL_RC="$HOME/.bashrc"
@@ -62,9 +74,10 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     fi
   fi
 else
-  echo "[4/4] PATH already configured"
+  echo "[4/5] PATH already configured"
 fi
 
+echo "[5/5] Done!"
 echo
 echo "✓ Installation complete!"
 echo
@@ -74,20 +87,3 @@ echo
 echo "Config will be auto-generated at: ~/.config/nicotine/config.toml"
 echo
 echo "Note: Restart your terminal first if PATH was just updated"
-echo
-echo "For autostart on login, create systemd service:"
-echo "  mkdir -p ~/.config/systemd/user"
-echo "  cat > ~/.config/systemd/user/nicotine.service << 'EOF'"
-echo "[Unit]"
-echo "Description=Nicotine - EVE Online Multiboxing"
-echo "After=graphical-session.target"
-echo ""
-echo "[Service]"
-echo "Type=simple"
-echo "ExecStart=%h/.local/bin/nicotine start"
-echo "Restart=on-failure"
-echo ""
-echo "[Install]"
-echo "WantedBy=default.target"
-echo "EOF"
-echo "  systemctl --user enable --now nicotine"

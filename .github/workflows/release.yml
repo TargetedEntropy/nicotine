@@ -66,5 +66,7 @@ jobs:
           files: |
             artifacts/nicotine-x86_64-unknown-linux-gnu/nicotine-linux-x86_64
             artifacts/nicotine-aarch64-unknown-linux-gnu/nicotine-linux-aarch64
+            assets/icon.png
+            assets/nicotine.desktop
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

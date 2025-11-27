@@ -4,21 +4,29 @@ set -e
 
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="nicotine"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=== Nicotine Local Installer ==="
 echo
 
-# Always build to ensure latest version
-echo "[1/4] Building release binary..."
+echo "[1/5] Building release binary..."
 cargo build --release
 
-echo "[2/4] Installing to $INSTALL_DIR..."
+echo "[2/5] Installing to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 cp "target/release/$BINARY_NAME" "$INSTALL_DIR/"
 
+echo "[3/5] Installing desktop file and icon..."
+mkdir -p ~/.local/share/applications
+mkdir -p ~/.local/share/icons/hicolor/256x256/apps
+cp "$SCRIPT_DIR/assets/nicotine.desktop" ~/.local/share/applications/
+cp "$SCRIPT_DIR/assets/icon.png" ~/.local/share/icons/hicolor/256x256/apps/nicotine.png
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
+
 # Add to PATH if needed
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    echo "[3/4] Adding $INSTALL_DIR to PATH..."
+    echo "[4/5] Adding $INSTALL_DIR to PATH..."
     SHELL_RC=""
     if [ -n "$BASH_VERSION" ]; then
         SHELL_RC="$HOME/.bashrc"
@@ -37,10 +45,10 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         fi
     fi
 else
-    echo "[3/4] PATH already configured"
+    echo "[4/5] PATH already configured"
 fi
 
-echo "[4/4] Testing installation..."
+echo "[5/5] Testing installation..."
 if "$INSTALL_DIR/$BINARY_NAME" --help > /dev/null 2>&1 || [ $? -eq 0 ]; then
     echo "✓ Binary installed successfully"
 else
