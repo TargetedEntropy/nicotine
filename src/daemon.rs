@@ -115,7 +115,7 @@ impl Daemon {
                         state.sync_with_active(active);
                     }
 
-                    state.cycle_forward(&*self.wm)?;
+                    state.cycle_forward(&*self.wm, self.config.minimize_inactive)?;
                 }
                 Command::Backward => {
                     let mut state = self.state.lock().unwrap();
@@ -125,7 +125,7 @@ impl Daemon {
                         state.sync_with_active(active);
                     }
 
-                    state.cycle_backward(&*self.wm)?;
+                    state.cycle_backward(&*self.wm, self.config.minimize_inactive)?;
                 }
                 Command::Refresh => {
                     let windows = self.wm.get_eve_windows()?;

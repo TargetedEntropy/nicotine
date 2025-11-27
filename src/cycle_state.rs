@@ -26,23 +26,43 @@ impl CycleState {
         }
     }
 
-    pub fn cycle_forward(&mut self, wm: &dyn WindowManager) -> Result<()> {
+    pub fn cycle_forward(&mut self, wm: &dyn WindowManager, minimize_inactive: bool) -> Result<()> {
         if self.windows.is_empty() {
             return Ok(());
         }
 
+        let previous_index = self.current_index;
         self.current_index = (self.current_index + 1) % self.windows.len();
         self.write_index();
-        let window_id = self.windows[self.current_index].id;
-        wm.activate_window(window_id)?;
+
+        let new_window_id = self.windows[self.current_index].id;
+
+        if minimize_inactive {
+            // Restore new window first (in case it was minimized)
+            let _ = wm.restore_window(new_window_id);
+        }
+
+        wm.activate_window(new_window_id)?;
+
+        if minimize_inactive && previous_index != self.current_index {
+            // Minimize the previous window after activating the new one
+            let previous_window_id = self.windows[previous_index].id;
+            let _ = wm.minimize_window(previous_window_id);
+        }
+
         Ok(())
     }
 
-    pub fn cycle_backward(&mut self, wm: &dyn WindowManager) -> Result<()> {
+    pub fn cycle_backward(
+        &mut self,
+        wm: &dyn WindowManager,
+        minimize_inactive: bool,
+    ) -> Result<()> {
         if self.windows.is_empty() {
             return Ok(());
         }
 
+        let previous_index = self.current_index;
         if self.current_index == 0 {
             self.current_index = self.windows.len() - 1;
         } else {
@@ -50,8 +70,22 @@ impl CycleState {
         }
 
         self.write_index();
-        let window_id = self.windows[self.current_index].id;
-        wm.activate_window(window_id)?;
+
+        let new_window_id = self.windows[self.current_index].id;
+
+        if minimize_inactive {
+            // Restore new window first (in case it was minimized)
+            let _ = wm.restore_window(new_window_id);
+        }
+
+        wm.activate_window(new_window_id)?;
+
+        if minimize_inactive && previous_index != self.current_index {
+            // Minimize the previous window after activating the new one
+            let previous_window_id = self.windows[previous_index].id;
+            let _ = wm.minimize_window(previous_window_id);
+        }
+
         Ok(())
     }
 

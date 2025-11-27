@@ -210,7 +210,7 @@ fn main() -> Result<()> {
                 state.sync_with_active(active);
             }
 
-            state.cycle_forward(&*wm)?;
+            state.cycle_forward(&*wm, config.minimize_inactive)?;
 
             // Lock is automatically released when file is dropped
         }
@@ -256,7 +256,7 @@ fn main() -> Result<()> {
                 state.sync_with_active(active);
             }
 
-            state.cycle_backward(&*wm)?;
+            state.cycle_backward(&*wm, config.minimize_inactive)?;
 
             // Lock is automatically released when file is dropped
         }

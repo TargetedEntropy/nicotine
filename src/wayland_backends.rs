@@ -170,6 +170,25 @@ impl WindowManager for KWinManager {
 
         Ok(None)
     }
+
+    fn minimize_window(&self, window_id: u32) -> Result<()> {
+        let hex_id = format!("0x{:08x}", window_id);
+        Command::new("xdotool")
+            .args(["windowminimize", &hex_id])
+            .output()
+            .context("Failed to minimize window")?;
+        Ok(())
+    }
+
+    fn restore_window(&self, window_id: u32) -> Result<()> {
+        let hex_id = format!("0x{:08x}", window_id);
+        // wmctrl -i -a activates and restores from minimized state
+        Command::new("wmctrl")
+            .args(["-i", "-a", &hex_id])
+            .output()
+            .context("Failed to restore window")?;
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -347,6 +366,23 @@ impl WindowManager for SwayManager {
 
         Ok(None)
     }
+
+    fn minimize_window(&self, window_id: u32) -> Result<()> {
+        Command::new("swaymsg")
+            .arg(format!("[con_id={}] move scratchpad", window_id))
+            .output()
+            .context("Failed to minimize window")?;
+        Ok(())
+    }
+
+    fn restore_window(&self, window_id: u32) -> Result<()> {
+        // Show from scratchpad restores it
+        Command::new("swaymsg")
+            .arg(format!("[con_id={}] scratchpad show", window_id))
+            .output()
+            .context("Failed to restore window")?;
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -512,5 +548,32 @@ impl WindowManager for HyprlandManager {
         }
 
         Ok(None)
+    }
+
+    fn minimize_window(&self, window_id: u32) -> Result<()> {
+        let address = format!("0x{:x}", window_id);
+        Command::new("hyprctl")
+            .args([
+                "dispatch",
+                "movetoworkspacesilent",
+                &format!("special,address:{}", address),
+            ])
+            .output()
+            .context("Failed to minimize window")?;
+        Ok(())
+    }
+
+    fn restore_window(&self, window_id: u32) -> Result<()> {
+        let address = format!("0x{:x}", window_id);
+        // Move back to current workspace
+        Command::new("hyprctl")
+            .args([
+                "dispatch",
+                "movetoworkspace",
+                &format!("e+0,address:{}", address),
+            ])
+            .output()
+            .context("Failed to restore window")?;
+        Ok(())
     }
 }

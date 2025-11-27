@@ -30,6 +30,12 @@ pub trait WindowManager: Send + Sync {
         let _ = (window_id, x, y);
         Ok(())
     }
+
+    /// Minimize a window
+    fn minimize_window(&self, window_id: u32) -> Result<()>;
+
+    /// Restore a minimized window
+    fn restore_window(&self, window_id: u32) -> Result<()>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

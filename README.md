@@ -17,6 +17,7 @@ High-performance EVE Online multiboxing tool for Linux (X11 & Wayland), inspired
 - **Draggable overlay** with middle-mouse button (X11 only)
 - **Auto-detects display resolution** - works on any monitor setup
 - **Multi-compositor support** - Works on X11, KDE Plasma (Wayland), Sway, and Hyprland
+- **Minimize inactive clients** - Optional feature to reduce resource usage by minimizing unfocused clients
 
 ## Roadmap
 - Comprehensive documentation
@@ -126,6 +127,7 @@ show_overlay = true        # Set to false to run daemon-only mode (no GUI)
 enable_mouse_buttons = true
 forward_button = 276       # Button 9
 backward_button = 275      # Button 8
+minimize_inactive = false  # Minimize clients when cycling away (saves resources)
 ```
 
 ## Architecture

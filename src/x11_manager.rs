@@ -215,6 +215,45 @@ impl X11Manager {
         self.conn.flush()?;
         Ok(())
     }
+
+    pub fn minimize_window(&self, window_id: u32) -> Result<()> {
+        // Use WM_CHANGE_STATE with IconicState to minimize
+        let wm_change_state = self
+            .conn
+            .intern_atom(false, b"WM_CHANGE_STATE")?
+            .reply()?
+            .atom;
+
+        let screen = &self.conn.setup().roots[self.screen_num];
+        let root = screen.root;
+
+        // IconicState = 3
+        let event = ClientMessageEvent {
+            response_type: CLIENT_MESSAGE_EVENT,
+            format: 32,
+            sequence: 0,
+            window: window_id,
+            type_: wm_change_state,
+            data: ClientMessageData::from([3u32, 0, 0, 0, 0]),
+        };
+
+        self.conn.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_NOTIFY | EventMask::SUBSTRUCTURE_REDIRECT,
+            event,
+        )?;
+
+        self.conn.flush()?;
+        Ok(())
+    }
+
+    pub fn restore_window(&self, window_id: u32) -> Result<()> {
+        // Map the window to restore it from minimized state
+        self.conn.map_window(window_id)?;
+        self.conn.flush()?;
+        Ok(())
+    }
 }
 
 impl WindowManager for X11Manager {
@@ -245,5 +284,13 @@ impl WindowManager for X11Manager {
 
     fn move_window(&self, window_id: u32, x: i32, y: i32) -> Result<()> {
         self.move_window(window_id, x, y)
+    }
+
+    fn minimize_window(&self, window_id: u32) -> Result<()> {
+        self.minimize_window(window_id)
+    }
+
+    fn restore_window(&self, window_id: u32) -> Result<()> {
+        self.restore_window(window_id)
     }
 }
