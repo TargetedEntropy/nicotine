@@ -145,7 +145,11 @@ impl CycleState {
             // Use character order from characters.txt
             let target_idx = target - 1; // Convert to 0-indexed
             if target_idx >= characters.len() {
-                anyhow::bail!("Target {} is out of range (only {} characters configured)", target, characters.len());
+                anyhow::bail!(
+                    "Target {} is out of range (only {} characters configured)",
+                    target,
+                    characters.len()
+                );
             }
 
             let target_name = &characters[target_idx];
@@ -154,12 +158,18 @@ impl CycleState {
             self.windows
                 .iter()
                 .position(|w| w.title == *target_name)
-                .ok_or_else(|| anyhow::anyhow!("Character '{}' not found in active windows", target_name))?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Character '{}' not found in active windows", target_name)
+                })?
         } else {
             // Fall back to window list order
             let target_idx = target - 1; // Convert to 0-indexed
             if target_idx >= self.windows.len() {
-                anyhow::bail!("Target {} is out of range (only {} windows)", target, self.windows.len());
+                anyhow::bail!(
+                    "Target {} is out of range (only {} windows)",
+                    target,
+                    self.windows.len()
+                );
             }
             target_idx
         };
@@ -489,11 +499,7 @@ mod tests {
         let wm = MockWindowManager::new();
 
         // Character order includes a character not in windows
-        let char_order = vec![
-            "Alpha".to_string(),
-            "Beta".to_string(),
-            "Gamma".to_string(),
-        ];
+        let char_order = vec!["Alpha".to_string(), "Beta".to_string(), "Gamma".to_string()];
 
         // Switch to target 3 (Gamma) - not logged in
         let result = state.switch_to(3, &wm, false, Some(&char_order));
