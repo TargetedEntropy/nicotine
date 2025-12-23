@@ -89,7 +89,7 @@ pub fn print_update_notification(new_version: &str, url: &str) {
     println!("Latest version:  {}", new_version);
     println!();
     println!("Update with:");
-    println!("curl -sSL https://raw.githubusercontent.com/isomerc/nicotine/main/install-github.sh | bash");
+    println!("curl -sSL https://raw.githubusercontent.com/isomerc/nicotine/refs/heads/master/install-github.sh | bash");
     println!();
     println!("Release notes: {}", url);
     println!();
