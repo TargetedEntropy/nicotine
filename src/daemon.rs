@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::cycle_state::CycleState;
+use crate::keyboard_listener::KeyboardListener;
 use crate::mouse_listener::MouseListener;
 use crate::window_manager::WindowManager;
 use anyhow::Result;
@@ -92,6 +93,25 @@ impl Daemon {
                         "Mouse buttons will not work. You can disable this warning by setting"
                     );
                     eprintln!("'enable_mouse_buttons = false' in ~/.config/nicotine/config.toml");
+                }
+            }
+        }
+
+        if self.config.enable_keyboard_buttons {
+            let keyboard_listener = KeyboardListener::new(self.config.clone());
+            let wm_clone = Arc::clone(&self.wm);
+            let state_clone = Arc::clone(&self.state);
+
+            match keyboard_listener.spawn(wm_clone, state_clone) {
+                Ok(_) => println!("Keyboard key listener started"),
+                Err(e) => {
+                    eprintln!("Warning: Could not start keyboard listener: {}", e);
+                    eprintln!(
+                        "Keyboard keys will not work.  You can disable this warning by setting"
+                    );
+                    eprintln!(
+                        "'enable_keyboard_buttons = false' in ~/.config/nicotine/config.toml"
+                    );
                 }
             }
         }

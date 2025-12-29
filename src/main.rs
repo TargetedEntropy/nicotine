@@ -1,6 +1,7 @@
 mod config;
 mod cycle_state;
 mod daemon;
+mod keyboard_listener;
 mod mouse_listener;
 mod overlay;
 mod version_check;

@@ -18,6 +18,12 @@ pub struct Config {
     pub forward_button: u16, // BTN_SIDE (mouse button 9)
     #[serde(default = "default_backward_button")]
     pub backward_button: u16, // BTN_EXTRA (mouse button 8)
+    #[serde(default = "default_enable_keyboard")]
+    pub enable_keyboard_buttons: bool,
+    #[serde(default = "default_forward_key")]
+    pub forward_key: u16, // KEY_TAB (15) - Tab for forward, Shift+Tab for backward
+    #[serde(default = "default_backward_key")]
+    pub backward_key: u16, // KEY_TAB (15) - Track SHIFT modifier internally
     #[serde(default = "default_show_overlay")]
     pub show_overlay: bool,
     #[serde(default = "default_mouse_device_name")]
@@ -26,6 +32,10 @@ pub struct Config {
     pub mouse_device_path: Option<String>,
     #[serde(default = "default_minimize_inactive")]
     pub minimize_inactive: bool,
+    #[serde(default = "default_keyboard_device_path")]
+    pub keyboard_device_path: Option<String>,
+    #[serde(default = "default_modifier_key")]
+    pub modifier_key: Option<u16>,
 }
 
 fn default_enable_mouse() -> bool {
@@ -38,6 +48,18 @@ fn default_forward_button() -> u16 {
 
 fn default_backward_button() -> u16 {
     275 // BTN_EXTRA (backward button, mouse button 8)
+}
+
+fn default_enable_keyboard() -> bool {
+    false // Disabled by default to avoid conflicts
+}
+
+fn default_forward_key() -> u16 {
+    15 // KEY_TAB
+}
+
+fn default_backward_key() -> u16 {
+    15 // KEY_TAB (Modifier applied if set)
 }
 
 fn default_show_overlay() -> bool {
@@ -54,6 +76,14 @@ fn default_mouse_device_path() -> Option<String> {
 
 fn default_minimize_inactive() -> bool {
     false
+}
+
+fn default_keyboard_device_path() -> Option<String> {
+    None
+}
+
+fn default_modifier_key() -> Option<u16> {
+    None // No modifier for backward shifting by default
 }
 
 impl Config {
@@ -139,10 +169,15 @@ impl Config {
             enable_mouse_buttons: true,
             forward_button: 276,  // BTN_SIDE (button 9)
             backward_button: 275, // BTN_EXTRA (button 8)
+            enable_keyboard_buttons: false,
+            forward_key: 15,  // KEY_TAB
+            backward_key: 15, // KEY_TAB (with Shift)
             show_overlay: true,
             mouse_device_name: None,
             mouse_device_path: None,
             minimize_inactive: false,
+            keyboard_device_path: None,
+            modifier_key: None,
         };
 
         // Save the generated config
@@ -172,10 +207,15 @@ impl Config {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            enable_keyboard_buttons: false,
+            forward_key: 15,
+            backward_key: 15,
             show_overlay: true,
             mouse_device_name: None,
             mouse_device_path: None,
             minimize_inactive: false,
+            keyboard_device_path: None,
+            modifier_key: None,
         };
 
         if let Some(parent) = config_path.parent() {
@@ -209,10 +249,15 @@ mod tests {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            enable_keyboard_buttons: false,
+            forward_key: 15,
+            backward_key: 15,
             show_overlay: true,
             mouse_device_name: None,
             mouse_device_path: None,
             minimize_inactive: false,
+            keyboard_device_path: None,
+            modifier_key: None,
         };
 
         // Height should be: 1080 - 40 = 1040
@@ -232,10 +277,15 @@ mod tests {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            enable_keyboard_buttons: false,
+            forward_key: 15,
+            backward_key: 15,
             show_overlay: true,
             mouse_device_name: None,
             mouse_device_path: None,
             minimize_inactive: false,
+            keyboard_device_path: None,
+            modifier_key: None,
         };
 
         assert_eq!(config.eve_height_adjusted(), 1080);
@@ -254,10 +304,15 @@ mod tests {
             enable_mouse_buttons: true,
             forward_button: 276,
             backward_button: 275,
+            enable_keyboard_buttons: false,
+            forward_key: 15,
+            backward_key: 15,
             show_overlay: true,
             mouse_device_name: None,
             mouse_device_path: None,
             minimize_inactive: false,
+            keyboard_device_path: None,
+            modifier_key: None,
         };
 
         let toml_str = toml::to_string(&config).unwrap();
