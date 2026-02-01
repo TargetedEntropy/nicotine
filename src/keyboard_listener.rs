@@ -83,6 +83,7 @@ impl KeyboardListener {
         let modifier_key = self.config.modifier_key;
         let keyboard_device_path = self.config.keyboard_device_path.clone();
         let minimize_inactive = self.config.minimize_inactive;
+        let primary_character = self.config.primary_character.clone();
 
         let handle = std::thread::spawn(move || {
             match Self::run_listener(
@@ -93,6 +94,7 @@ impl KeyboardListener {
                 modifier_key,
                 keyboard_device_path,
                 minimize_inactive,
+                primary_character,
             ) {
                 Ok(_) => println!("Keyboard listener stopped"),
                 Err(e) => println!("Keyboard listener error: {}", e),
@@ -102,6 +104,7 @@ impl KeyboardListener {
         Ok(handle)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn run_listener(
         wm: Arc<dyn WindowManager>,
         state: Arc<Mutex<CycleState>>,
@@ -110,6 +113,7 @@ impl KeyboardListener {
         modifier_key: Option<u16>,
         keyboard_device_path: Option<String>,
         minimize_inactive: bool,
+        primary_character: Option<String>,
     ) -> Result<()> {
         let mut device = Self::find_keyboard_device(keyboard_device_path.as_deref()).context(
             "Failed to find keyboard device. Make sure you have permission to read /dev/input/event*",
@@ -140,17 +144,17 @@ impl KeyboardListener {
                         // Have to check modifier + backwards first, otherwise if backward == forward it ignores the modifier flag
                         if code == backward_key && modifier_pressed {
                             println!("Backward + Modifier button pressed");
-                            if let Err(e) = Self::cycle_backward(&wm, &state, minimize_inactive) {
+                            if let Err(e) = Self::cycle_backward(&wm, &state, minimize_inactive, primary_character.as_deref()) {
                                 eprintln!("Failed to cycle backward: {}", e);
                             }
                         } else if code == forward_key {
                             println!("Forward button pressed");
-                            if let Err(e) = Self::cycle_forward(&wm, &state, minimize_inactive) {
+                            if let Err(e) = Self::cycle_forward(&wm, &state, minimize_inactive, primary_character.as_deref()) {
                                 eprintln!("Failed to cycle forward: {}", e);
                             }
                         } else if code == backward_key {
                             println!("Backward button pressed");
-                            if let Err(e) = Self::cycle_backward(&wm, &state, minimize_inactive) {
+                            if let Err(e) = Self::cycle_backward(&wm, &state, minimize_inactive, primary_character.as_deref()) {
                                 eprintln!("Failed to cycle backward: {}", e);
                             }
                         }
@@ -164,6 +168,7 @@ impl KeyboardListener {
         wm: &Arc<dyn WindowManager>,
         state: &Arc<Mutex<CycleState>>,
         minimize_inactive: bool,
+        skip_character: Option<&str>,
     ) -> Result<()> {
         let mut state = state.lock().unwrap();
 
@@ -172,7 +177,7 @@ impl KeyboardListener {
             state.sync_with_active(active);
         }
 
-        state.cycle_forward(&**wm, minimize_inactive, None)?;
+        state.cycle_forward(&**wm, minimize_inactive, skip_character)?;
         Ok(())
     }
 
@@ -180,6 +185,7 @@ impl KeyboardListener {
         wm: &Arc<dyn WindowManager>,
         state: &Arc<Mutex<CycleState>>,
         minimize_inactive: bool,
+        skip_character: Option<&str>,
     ) -> Result<()> {
         let mut state = state.lock().unwrap();
 
@@ -188,7 +194,7 @@ impl KeyboardListener {
             state.sync_with_active(active);
         }
 
-        state.cycle_backward(&**wm, minimize_inactive, None)?;
+        state.cycle_backward(&**wm, minimize_inactive, skip_character)?;
         Ok(())
     }
 }
