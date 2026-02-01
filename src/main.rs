@@ -70,6 +70,31 @@ fn create_window_manager() -> Result<Arc<dyn WindowManager>> {
     }
 }
 
+/// Validate that the window manager can perform basic operations.
+/// This is called before daemonizing to ensure errors are visible to the user.
+fn validate_window_manager(wm: &Arc<dyn WindowManager>) -> Result<()> {
+    // Try to list windows - this validates the compositor tools work
+    match wm.get_eve_windows() {
+        Ok(windows) => {
+            println!(
+                "Window manager validated ({} EVE clients found)",
+                windows.len()
+            );
+            Ok(())
+        }
+        Err(e) => {
+            anyhow::bail!(
+                "Window manager validation failed: {}\n\
+                 Make sure the required tools are installed and working.\n\
+                 For Sway: swaymsg must be available\n\
+                 For Hyprland: hyprctl must be available\n\
+                 For KDE: wmctrl must be installed (sudo pacman -S wmctrl)",
+                e
+            )
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let command = args.get(1).map(|s| s.as_str()).unwrap_or("");
@@ -80,6 +105,9 @@ fn main() -> Result<()> {
     match command {
         "start" => {
             println!("Starting Nicotine 🚬");
+
+            // Validate window manager before daemonizing so errors are visible
+            validate_window_manager(&wm)?;
 
             // Check for updates (non-blocking, silent on errors)
             if let Ok(Some((new_version, url))) = version_check::check_for_updates() {

@@ -120,29 +120,159 @@ impl Config {
     }
 
     fn detect_display_size() -> (u32, u32) {
-        // Try to detect display size using xrandr
-        if let Ok(output) = std::process::Command::new("xrandr")
+        // Try xrandr first (works on X11 and some XWayland setups)
+        if let Some(size) = Self::detect_via_xrandr() {
+            println!("Display detected via xrandr");
+            return size;
+        }
+
+        // Try swaymsg for Sway compositor
+        if let Some(size) = Self::detect_via_swaymsg() {
+            println!("Display detected via swaymsg");
+            return size;
+        }
+
+        // Try hyprctl for Hyprland compositor
+        if let Some(size) = Self::detect_via_hyprctl() {
+            println!("Display detected via hyprctl");
+            return size;
+        }
+
+        // Try wlr-randr for wlroots-based compositors
+        if let Some(size) = Self::detect_via_wlr_randr() {
+            println!("Display detected via wlr-randr");
+            return size;
+        }
+
+        // Fallback to common resolution
+        eprintln!("Warning: Could not detect display size, using default 1920x1080");
+        eprintln!(
+            "Edit ~/.config/nicotine/config.toml to set correct display_width and display_height"
+        );
+        (1920, 1080)
+    }
+
+    fn detect_via_xrandr() -> Option<(u32, u32)> {
+        let output = std::process::Command::new("xrandr")
             .args(["--current"])
             .output()
-        {
-            if let Ok(stdout) = String::from_utf8(output.stdout) {
-                for line in stdout.lines() {
-                    if line.contains("*") && line.contains("x") {
-                        // Parse line like: "7680x2160     60.00*+"
-                        if let Some(resolution) = line.split_whitespace().next() {
-                            if let Some((w, h)) = resolution.split_once('x') {
-                                if let (Ok(width), Ok(height)) = (w.parse(), h.parse()) {
-                                    return (width, height);
-                                }
-                            }
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8(output.stdout).ok()?;
+        for line in stdout.lines() {
+            if line.contains("*") && line.contains("x") {
+                // Parse line like: "7680x2160     60.00*+"
+                if let Some(resolution) = line.split_whitespace().next() {
+                    if let Some((w, h)) = resolution.split_once('x') {
+                        if let (Ok(width), Ok(height)) = (w.parse(), h.parse()) {
+                            return Some((width, height));
                         }
                     }
                 }
             }
         }
+        None
+    }
 
-        // Fallback to common resolution
-        (1920, 1080)
+    fn detect_via_swaymsg() -> Option<(u32, u32)> {
+        let output = std::process::Command::new("swaymsg")
+            .args(["-t", "get_outputs"])
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8(output.stdout).ok()?;
+        let outputs: serde_json::Value = serde_json::from_str(&stdout).ok()?;
+
+        // Find the focused output or first active one
+        if let Some(outputs_array) = outputs.as_array() {
+            for output in outputs_array {
+                let active = output
+                    .get("active")
+                    .and_then(|a| a.as_bool())
+                    .unwrap_or(false);
+                if active {
+                    if let Some(rect) = output.get("rect") {
+                        let width = rect.get("width").and_then(|w| w.as_u64())? as u32;
+                        let height = rect.get("height").and_then(|h| h.as_u64())? as u32;
+                        return Some((width, height));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn detect_via_hyprctl() -> Option<(u32, u32)> {
+        let output = std::process::Command::new("hyprctl")
+            .args(["monitors", "-j"])
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8(output.stdout).ok()?;
+        let monitors: serde_json::Value = serde_json::from_str(&stdout).ok()?;
+
+        // Find the focused monitor or first one
+        if let Some(monitors_array) = monitors.as_array() {
+            for monitor in monitors_array {
+                let focused = monitor
+                    .get("focused")
+                    .and_then(|f| f.as_bool())
+                    .unwrap_or(false);
+                if focused || monitors_array.len() == 1 {
+                    let width = monitor.get("width").and_then(|w| w.as_u64())? as u32;
+                    let height = monitor.get("height").and_then(|h| h.as_u64())? as u32;
+                    return Some((width, height));
+                }
+            }
+            // Fallback to first monitor if none focused
+            if let Some(monitor) = monitors_array.first() {
+                let width = monitor.get("width").and_then(|w| w.as_u64())? as u32;
+                let height = monitor.get("height").and_then(|h| h.as_u64())? as u32;
+                return Some((width, height));
+            }
+        }
+        None
+    }
+
+    fn detect_via_wlr_randr() -> Option<(u32, u32)> {
+        let output = std::process::Command::new("wlr-randr").output().ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8(output.stdout).ok()?;
+        // Parse output like:
+        // DP-1 "..."
+        //   Enabled: yes
+        //   Modes:
+        //     3840x2160 px, 60.000000 Hz (preferred, current)
+        for line in stdout.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("current") && trimmed.contains("x") && trimmed.contains("px") {
+                // Parse line like: "3840x2160 px, 60.000000 Hz (preferred, current)"
+                if let Some(resolution) = trimmed.split_whitespace().next() {
+                    if let Some((w, h)) = resolution.split_once('x') {
+                        if let (Ok(width), Ok(height)) = (w.parse(), h.parse()) {
+                            return Some((width, height));
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     pub fn load() -> Result<Self> {

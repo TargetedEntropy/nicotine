@@ -123,13 +123,22 @@ impl WindowManager for KWinManager {
             let hex_id = format!("0x{:08x}", window.id);
 
             // Move and resize window using wmctrl
-            Command::new("wmctrl")
+            let output = Command::new("wmctrl")
                 .arg("-i")
                 .arg("-r")
                 .arg(&hex_id)
                 .arg("-e")
                 .arg(format!("0,{},{},{},{}", x, y, width, height))
-                .output()?;
+                .output()
+                .context("Failed to execute wmctrl")?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "wmctrl failed to stack window {}: {}",
+                    hex_id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         Ok(())
@@ -316,20 +325,47 @@ impl WindowManager for SwayManager {
 
         for window in windows {
             // Sway uses floating mode for positioning
-            Command::new("swaymsg")
+            let output = Command::new("swaymsg")
                 .arg(format!("[con_id={}] floating enable", window.id))
-                .output()?;
+                .output()
+                .context("Failed to execute swaymsg")?;
 
-            Command::new("swaymsg")
+            if !output.status.success() {
+                anyhow::bail!(
+                    "swaymsg failed to enable floating for window {}: {}",
+                    window.id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            let output = Command::new("swaymsg")
                 .arg(format!("[con_id={}] move position {} {}", window.id, x, y))
-                .output()?;
+                .output()
+                .context("Failed to execute swaymsg")?;
 
-            Command::new("swaymsg")
+            if !output.status.success() {
+                anyhow::bail!(
+                    "swaymsg failed to move window {}: {}",
+                    window.id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            let output = Command::new("swaymsg")
                 .arg(format!(
                     "[con_id={}] resize set {} {}",
                     window.id, width, height
                 ))
-                .output()?;
+                .output()
+                .context("Failed to execute swaymsg")?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "swaymsg failed to resize window {}: {}",
+                    window.id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         Ok(())
@@ -483,25 +519,52 @@ impl WindowManager for HyprlandManager {
             let address = format!("0x{:x}", window.id);
 
             // Enable floating
-            Command::new("hyprctl")
+            let output = Command::new("hyprctl")
                 .arg("dispatch")
                 .arg("togglefloating")
                 .arg(format!("address:{}", address))
-                .output()?;
+                .output()
+                .context("Failed to execute hyprctl")?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "hyprctl failed to toggle floating for window {}: {}",
+                    address,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
 
             // Move window
-            Command::new("hyprctl")
+            let output = Command::new("hyprctl")
                 .arg("dispatch")
                 .arg("movewindowpixel")
                 .arg(format!("exact {} {},address:{}", x, y, address))
-                .output()?;
+                .output()
+                .context("Failed to execute hyprctl")?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "hyprctl failed to move window {}: {}",
+                    address,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
 
             // Resize window
-            Command::new("hyprctl")
+            let output = Command::new("hyprctl")
                 .arg("dispatch")
                 .arg("resizewindowpixel")
                 .arg(format!("exact {} {},address:{}", width, height, address))
-                .output()?;
+                .output()
+                .context("Failed to execute hyprctl")?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "hyprctl failed to resize window {}: {}",
+                    address,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         Ok(())
