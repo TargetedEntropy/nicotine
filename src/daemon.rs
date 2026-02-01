@@ -157,7 +157,8 @@ impl Daemon {
                         state.sync_with_active(active);
                     }
 
-                    state.cycle_forward(&*self.wm, self.config.minimize_inactive)?;
+                    let skip = self.config.primary_character.as_deref();
+                    state.cycle_forward(&*self.wm, self.config.minimize_inactive, skip)?;
                 }
                 Command::Backward => {
                     let mut state = self.state.lock().unwrap();
@@ -167,7 +168,8 @@ impl Daemon {
                         state.sync_with_active(active);
                     }
 
-                    state.cycle_backward(&*self.wm, self.config.minimize_inactive)?;
+                    let skip = self.config.primary_character.as_deref();
+                    state.cycle_backward(&*self.wm, self.config.minimize_inactive, skip)?;
                 }
                 Command::Switch(target) => {
                     let mut state = self.state.lock().unwrap();

@@ -26,13 +26,31 @@ impl CycleState {
         }
     }
 
-    pub fn cycle_forward(&mut self, wm: &dyn WindowManager, minimize_inactive: bool) -> Result<()> {
+    pub fn cycle_forward(
+        &mut self,
+        wm: &dyn WindowManager,
+        minimize_inactive: bool,
+        skip_character: Option<&str>,
+    ) -> Result<()> {
         if self.windows.is_empty() {
             return Ok(());
         }
 
         let previous_index = self.current_index;
-        self.current_index = (self.current_index + 1) % self.windows.len();
+
+        // Find next window that isn't the skipped character
+        let mut next = (self.current_index + 1) % self.windows.len();
+        if let Some(skip) = skip_character {
+            let start = next;
+            while self.windows[next].title == skip {
+                next = (next + 1) % self.windows.len();
+                if next == start {
+                    return Ok(()); // All windows are skipped, do nothing
+                }
+            }
+        }
+
+        self.current_index = next;
         self.write_index();
 
         let new_window_id = self.windows[self.current_index].id;
@@ -57,18 +75,35 @@ impl CycleState {
         &mut self,
         wm: &dyn WindowManager,
         minimize_inactive: bool,
+        skip_character: Option<&str>,
     ) -> Result<()> {
         if self.windows.is_empty() {
             return Ok(());
         }
 
         let previous_index = self.current_index;
-        if self.current_index == 0 {
-            self.current_index = self.windows.len() - 1;
+
+        // Find previous window that isn't the skipped character
+        let mut prev = if self.current_index == 0 {
+            self.windows.len() - 1
         } else {
-            self.current_index -= 1;
+            self.current_index - 1
+        };
+        if let Some(skip) = skip_character {
+            let start = prev;
+            while self.windows[prev].title == skip {
+                prev = if prev == 0 {
+                    self.windows.len() - 1
+                } else {
+                    prev - 1
+                };
+                if prev == start {
+                    return Ok(()); // All windows are skipped, do nothing
+                }
+            }
         }
 
+        self.current_index = prev;
         self.write_index();
 
         let new_window_id = self.windows[self.current_index].id;
@@ -208,6 +243,7 @@ mod tests {
         EveWindow {
             id,
             title: title.to_string(),
+            monitor: None,
         }
     }
 

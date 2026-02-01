@@ -60,9 +60,12 @@ impl X11Manager {
             if let Ok(title) = self.get_window_title(window) {
                 // Filter for EVE windows (steam_app_8500) and exclude launcher
                 if title.starts_with("EVE - ") && !title.contains("Launcher") {
+                    // Determine which monitor this window is on based on its geometry
+                    let monitor = self.get_window_monitor(window);
                     eve_windows.push(EveWindow {
                         id: window as u64,
                         title: title.trim_start_matches("EVE - ").to_string(),
+                        monitor,
                     });
                 }
             }
@@ -119,29 +122,6 @@ impl X11Manager {
 
         self.conn
             .set_input_focus(InputFocus::PARENT, window_id_u32, x11rb::CURRENT_TIME)?;
-
-        self.conn.flush()?;
-        Ok(())
-    }
-
-    pub fn stack_windows_internal(
-        &self,
-        windows: &[EveWindow],
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-    ) -> Result<()> {
-        for window in windows {
-            // Move and resize window
-            let values = ConfigureWindowAux::new()
-                .x(x)
-                .y(y)
-                .width(width)
-                .height(height);
-
-            self.conn.configure_window(window.id as u32, &values)?;
-        }
 
         self.conn.flush()?;
         Ok(())
@@ -256,6 +236,86 @@ impl X11Manager {
         self.conn.flush()?;
         Ok(())
     }
+
+    /// Get monitor geometry using xrandr
+    pub fn get_monitors_internal(&self) -> Result<Vec<crate::window_manager::Monitor>> {
+        use std::process::Command;
+
+        let output = Command::new("xrandr")
+            .arg("--query")
+            .output()
+            .context("Failed to execute xrandr")?;
+
+        if !output.status.success() {
+            return Ok(Vec::new());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut monitors = Vec::new();
+
+        // Parse xrandr output: "DP-1 connected primary 2560x1440+0+0 ..."
+        for line in stdout.lines() {
+            if line.contains(" connected") {
+                // Find geometry pattern: WIDTHxHEIGHT+X+Y
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                let name = parts.first().map(|s| s.to_string()).unwrap_or_default();
+
+                for part in &parts {
+                    // Match pattern like "2560x1440+0+0"
+                    if part.contains('x') && part.contains('+') {
+                        if let Some((res, pos)) = part.split_once('+') {
+                            if let Some((width_str, height_str)) = res.split_once('x') {
+                                let pos_parts: Vec<&str> = pos.split('+').collect();
+                                if pos_parts.len() >= 2 {
+                                    if let (Ok(width), Ok(height), Ok(x), Ok(y)) = (
+                                        width_str.parse::<u32>(),
+                                        height_str.parse::<u32>(),
+                                        pos_parts[0].parse::<i32>(),
+                                        pos_parts[1].parse::<i32>(),
+                                    ) {
+                                        monitors.push(crate::window_manager::Monitor {
+                                            name,
+                                            x,
+                                            y,
+                                            width,
+                                            height,
+                                        });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(monitors)
+    }
+
+    /// Determine which monitor a window is on based on its geometry
+    fn get_window_monitor(&self, window: u32) -> Option<String> {
+        let geom = self.conn.get_geometry(window).ok()?.reply().ok()?;
+        let monitors = self.get_monitors_internal().ok()?;
+
+        // Window center point
+        let win_center_x = geom.x as i32 + (geom.width as i32 / 2);
+        let win_center_y = geom.y as i32 + (geom.height as i32 / 2);
+
+        // Find which monitor contains the window center
+        for mon in &monitors {
+            if win_center_x >= mon.x
+                && win_center_x < mon.x + mon.width as i32
+                && win_center_y >= mon.y
+                && win_center_y < mon.y + mon.height as i32
+            {
+                return Some(mon.name.clone());
+            }
+        }
+
+        // Fallback: return first monitor
+        monitors.first().map(|m| m.name.clone())
+    }
 }
 
 impl WindowManager for X11Manager {
@@ -268,12 +328,64 @@ impl WindowManager for X11Manager {
     }
 
     fn stack_windows(&self, windows: &[EveWindow], config: &Config) -> Result<()> {
-        let x = ((config.display_width - config.eve_width) / 2) as i32;
-        let y = 0;
-        let width = config.eve_width;
-        let height = config.display_height - config.panel_height;
+        let monitors = self.get_monitors()?;
 
-        self.stack_windows_internal(windows, x, y, width, height)
+        for window in windows {
+            // Determine target monitor:
+            // - Primary character goes to primary_monitor
+            // - Others stay on their current monitor
+            let is_primary = config
+                .primary_character
+                .as_ref()
+                .map(|c| window.title == *c)
+                .unwrap_or(false);
+
+            let target_monitor = if is_primary {
+                // Primary character goes to primary_monitor
+                config
+                    .primary_monitor
+                    .as_ref()
+                    .and_then(|name| monitors.iter().find(|m| &m.name == name))
+                    .or_else(|| monitors.first())
+            } else {
+                // Others stay on current monitor
+                window
+                    .monitor
+                    .as_ref()
+                    .and_then(|name| monitors.iter().find(|m| &m.name == name))
+                    .or_else(|| monitors.first())
+            };
+
+            let (x, y, width, height) = if let Some(mon) = target_monitor {
+                if config.fullscreen_stack {
+                    // Fullscreen on monitor
+                    let height = mon.height.saturating_sub(config.panel_height);
+                    (mon.x, mon.y, mon.width, height)
+                } else {
+                    // Centered with eve_width
+                    let eve_w = config.eve_width.min(mon.width);
+                    let x = mon.x + ((mon.width - eve_w) / 2) as i32;
+                    let height = mon.height.saturating_sub(config.panel_height);
+                    (x, mon.y, eve_w, height)
+                }
+            } else {
+                // Fallback to global config
+                let x = ((config.display_width - config.eve_width) / 2) as i32;
+                let height = config.display_height - config.panel_height;
+                (x, 0, config.eve_width, height)
+            };
+
+            let values = ConfigureWindowAux::new()
+                .x(x)
+                .y(y)
+                .width(width)
+                .height(height);
+
+            self.conn.configure_window(window.id as u32, &values)?;
+        }
+
+        self.conn.flush()?;
+        Ok(())
     }
 
     fn get_active_window(&self) -> Result<u64> {
@@ -294,5 +406,9 @@ impl WindowManager for X11Manager {
 
     fn restore_window(&self, window_id: u64) -> Result<()> {
         self.restore_window(window_id)
+    }
+
+    fn get_monitors(&self) -> Result<Vec<crate::window_manager::Monitor>> {
+        self.get_monitors_internal()
     }
 }

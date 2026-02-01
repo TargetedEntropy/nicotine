@@ -172,7 +172,7 @@ impl KeyboardListener {
             state.sync_with_active(active);
         }
 
-        state.cycle_forward(&**wm, minimize_inactive)?;
+        state.cycle_forward(&**wm, minimize_inactive, None)?;
         Ok(())
     }
 
@@ -188,7 +188,7 @@ impl KeyboardListener {
             state.sync_with_active(active);
         }
 
-        state.cycle_backward(&**wm, minimize_inactive)?;
+        state.cycle_backward(&**wm, minimize_inactive, None)?;
         Ok(())
     }
 }

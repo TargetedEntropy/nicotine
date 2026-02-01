@@ -2,9 +2,19 @@ use crate::config::Config;
 use anyhow::Result;
 
 #[derive(Debug, Clone)]
+pub struct Monitor {
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct EveWindow {
     pub id: u64,
     pub title: String,
+    pub monitor: Option<String>,
 }
 
 /// Trait for window management across different display servers and compositors
@@ -36,6 +46,12 @@ pub trait WindowManager: Send + Sync {
 
     /// Restore a minimized window
     fn restore_window(&self, window_id: u64) -> Result<()>;
+
+    /// Get all monitors/outputs with their geometry
+    fn get_monitors(&self) -> Result<Vec<Monitor>> {
+        // Default implementation: return empty vec (fallback to global config)
+        Ok(Vec::new())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -239,7 +239,8 @@ fn main() -> Result<()> {
                 state.sync_with_active(active);
             }
 
-            state.cycle_forward(&*wm, config.minimize_inactive)?;
+            let skip = config.primary_character.as_deref();
+            state.cycle_forward(&*wm, config.minimize_inactive, skip)?;
 
             // Lock is automatically released when file is dropped
         }
@@ -285,7 +286,8 @@ fn main() -> Result<()> {
                 state.sync_with_active(active);
             }
 
-            state.cycle_backward(&*wm, config.minimize_inactive)?;
+            let skip = config.primary_character.as_deref();
+            state.cycle_backward(&*wm, config.minimize_inactive, skip)?;
 
             // Lock is automatically released when file is dropped
         }

@@ -36,6 +36,12 @@ pub struct Config {
     pub keyboard_device_path: Option<String>,
     #[serde(default = "default_modifier_key")]
     pub modifier_key: Option<u16>,
+    #[serde(default)]
+    pub primary_character: Option<String>,
+    #[serde(default)]
+    pub primary_monitor: Option<String>,
+    #[serde(default)]
+    pub fullscreen_stack: bool,
 }
 
 fn default_enable_mouse() -> bool {
@@ -308,6 +314,9 @@ impl Config {
             minimize_inactive: false,
             keyboard_device_path: None,
             modifier_key: None,
+            primary_character: None,
+            primary_monitor: None,
+            fullscreen_stack: false,
         };
 
         // Save the generated config
@@ -346,6 +355,9 @@ impl Config {
             minimize_inactive: false,
             keyboard_device_path: None,
             modifier_key: None,
+            primary_character: None,
+            primary_monitor: None,
+            fullscreen_stack: false,
         };
 
         if let Some(parent) = config_path.parent() {
@@ -388,6 +400,9 @@ mod tests {
             minimize_inactive: false,
             keyboard_device_path: None,
             modifier_key: None,
+            primary_character: None,
+            primary_monitor: None,
+            fullscreen_stack: false,
         };
 
         // Height should be: 1080 - 40 = 1040
@@ -416,6 +431,9 @@ mod tests {
             minimize_inactive: false,
             keyboard_device_path: None,
             modifier_key: None,
+            primary_character: None,
+            primary_monitor: None,
+            fullscreen_stack: false,
         };
 
         assert_eq!(config.eve_height_adjusted(), 1080);
@@ -443,6 +461,9 @@ mod tests {
             minimize_inactive: false,
             keyboard_device_path: None,
             modifier_key: None,
+            primary_character: None,
+            primary_monitor: None,
+            fullscreen_stack: false,
         };
 
         let toml_str = toml::to_string(&config).unwrap();
