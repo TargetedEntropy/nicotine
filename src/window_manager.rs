@@ -3,7 +3,7 @@ use anyhow::Result;
 
 #[derive(Debug, Clone)]
 pub struct EveWindow {
-    pub id: u32,
+    pub id: u64,
     pub title: String,
 }
 
@@ -13,29 +13,29 @@ pub trait WindowManager: Send + Sync {
     fn get_eve_windows(&self) -> Result<Vec<EveWindow>>;
 
     /// Activate/focus a specific window by ID
-    fn activate_window(&self, window_id: u32) -> Result<()>;
+    fn activate_window(&self, window_id: u64) -> Result<()>;
 
     /// Stack all EVE windows at the same position (centered)
     fn stack_windows(&self, windows: &[EveWindow], config: &Config) -> Result<()>;
 
     /// Get the currently active window ID
-    fn get_active_window(&self) -> Result<u32>;
+    fn get_active_window(&self) -> Result<u64>;
 
     /// Find a window by its title (returns window ID if found)
-    fn find_window_by_title(&self, title: &str) -> Result<Option<u32>>;
+    fn find_window_by_title(&self, title: &str) -> Result<Option<u64>>;
 
     /// Move a window to a specific position (X11 only, no-op on Wayland)
-    fn move_window(&self, window_id: u32, x: i32, y: i32) -> Result<()> {
+    fn move_window(&self, window_id: u64, x: i32, y: i32) -> Result<()> {
         // Default implementation: no-op (Wayland doesn't allow arbitrary window positioning)
         let _ = (window_id, x, y);
         Ok(())
     }
 
     /// Minimize a window
-    fn minimize_window(&self, window_id: u32) -> Result<()>;
+    fn minimize_window(&self, window_id: u64) -> Result<()>;
 
     /// Restore a minimized window
-    fn restore_window(&self, window_id: u32) -> Result<()>;
+    fn restore_window(&self, window_id: u64) -> Result<()>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

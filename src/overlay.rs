@@ -10,7 +10,7 @@ pub struct OverlayApp {
     config: crate::config::Config,
     drag_start_window_pos: Option<egui::Pos2>,
     drag_accumulated: egui::Vec2,
-    overlay_window_id: Option<u32>,
+    overlay_window_id: Option<u64>,
     last_sync: Instant,
     last_index: usize,
 }

@@ -71,11 +71,11 @@ impl WindowManager for KWinManager {
 
         for (id_str, title) in windows {
             if title.starts_with("EVE - ") && !title.contains("Launcher") {
-                // Parse hex window ID (e.g., "0x06e00008") to u32
+                // Parse hex window ID (e.g., "0x06e00008") to u64
                 let id = if let Some(hex) = id_str.strip_prefix("0x") {
-                    u32::from_str_radix(hex, 16).unwrap_or(0)
+                    u64::from_str_radix(hex, 16).unwrap_or(0)
                 } else {
-                    id_str.parse::<u32>().unwrap_or(0)
+                    id_str.parse::<u64>().unwrap_or(0)
                 };
 
                 if id != 0 {
@@ -90,7 +90,7 @@ impl WindowManager for KWinManager {
         Ok(eve_windows)
     }
 
-    fn activate_window(&self, window_id: u32) -> Result<()> {
+    fn activate_window(&self, window_id: u64) -> Result<()> {
         let hex_id = format!("0x{:08x}", window_id);
 
         if let Some(title) = self.get_window_title_by_id(&hex_id) {
@@ -144,7 +144,7 @@ impl WindowManager for KWinManager {
         Ok(())
     }
 
-    fn get_active_window(&self) -> Result<u32> {
+    fn get_active_window(&self) -> Result<u64> {
         // Use xdotool to get active window (works through XWayland)
         let output = Command::new("xdotool")
             .arg("getactivewindow")
@@ -153,22 +153,22 @@ impl WindowManager for KWinManager {
 
         let window_id = String::from_utf8_lossy(&output.stdout)
             .trim()
-            .parse::<u32>()
+            .parse::<u64>()
             .context("Failed to parse active window ID")?;
 
         Ok(window_id)
     }
 
-    fn find_window_by_title(&self, title: &str) -> Result<Option<u32>> {
+    fn find_window_by_title(&self, title: &str) -> Result<Option<u64>> {
         let windows = self.get_all_windows()?;
 
         for (id_str, window_title) in windows {
             if window_title == title {
-                // Parse hex window ID (e.g., "0x06e00008") to u32
+                // Parse hex window ID (e.g., "0x06e00008") to u64
                 let id = if let Some(hex) = id_str.strip_prefix("0x") {
-                    u32::from_str_radix(hex, 16).unwrap_or(0)
+                    u64::from_str_radix(hex, 16).unwrap_or(0)
                 } else {
-                    id_str.parse::<u32>().unwrap_or(0)
+                    id_str.parse::<u64>().unwrap_or(0)
                 };
 
                 if id != 0 {
@@ -180,7 +180,7 @@ impl WindowManager for KWinManager {
         Ok(None)
     }
 
-    fn minimize_window(&self, window_id: u32) -> Result<()> {
+    fn minimize_window(&self, window_id: u64) -> Result<()> {
         let hex_id = format!("0x{:08x}", window_id);
         Command::new("xdotool")
             .args(["windowminimize", &hex_id])
@@ -189,7 +189,7 @@ impl WindowManager for KWinManager {
         Ok(())
     }
 
-    fn restore_window(&self, window_id: u32) -> Result<()> {
+    fn restore_window(&self, window_id: u64) -> Result<()> {
         let hex_id = format!("0x{:08x}", window_id);
         // wmctrl -i -a activates and restores from minimized state
         Command::new("wmctrl")
@@ -275,8 +275,8 @@ impl SwayManager {
             .map(|s| s.to_string())
     }
 
-    fn get_window_id(window: &Value) -> Option<u32> {
-        window.get("id").and_then(|i| i.as_u64()).map(|i| i as u32)
+    fn get_window_id(window: &Value) -> Option<u64> {
+        window.get("id").and_then(|i| i.as_u64())
     }
 }
 
@@ -301,7 +301,7 @@ impl WindowManager for SwayManager {
         Ok(eve_windows)
     }
 
-    fn activate_window(&self, window_id: u32) -> Result<()> {
+    fn activate_window(&self, window_id: u64) -> Result<()> {
         let output = Command::new("swaymsg")
             .arg(format!("[con_id={}] focus", window_id))
             .output()
@@ -371,7 +371,7 @@ impl WindowManager for SwayManager {
         Ok(())
     }
 
-    fn get_active_window(&self) -> Result<u32> {
+    fn get_active_window(&self) -> Result<u64> {
         let windows = self.get_all_windows()?;
 
         for window in windows {
@@ -387,7 +387,7 @@ impl WindowManager for SwayManager {
         anyhow::bail!("No active window found")
     }
 
-    fn find_window_by_title(&self, title: &str) -> Result<Option<u32>> {
+    fn find_window_by_title(&self, title: &str) -> Result<Option<u64>> {
         let windows = self.get_all_windows()?;
 
         for window in windows {
@@ -403,7 +403,7 @@ impl WindowManager for SwayManager {
         Ok(None)
     }
 
-    fn minimize_window(&self, window_id: u32) -> Result<()> {
+    fn minimize_window(&self, window_id: u64) -> Result<()> {
         Command::new("swaymsg")
             .arg(format!("[con_id={}] move scratchpad", window_id))
             .output()
@@ -411,7 +411,7 @@ impl WindowManager for SwayManager {
         Ok(())
     }
 
-    fn restore_window(&self, window_id: u32) -> Result<()> {
+    fn restore_window(&self, window_id: u64) -> Result<()> {
         // Show from scratchpad restores it
         Command::new("swaymsg")
             .arg(format!("[con_id={}] scratchpad show", window_id))
@@ -467,11 +467,11 @@ impl WindowManager for HyprlandManager {
         for window in windows {
             if let Some(title) = window.get("title").and_then(|t| t.as_str()) {
                 if title.starts_with("EVE - ") && !title.contains("Launcher") {
-                    // Hyprland uses hex addresses, we'll hash it to a u32
+                    // Hyprland uses hex addresses - must use u64 to avoid truncation
                     if let Some(address) = window.get("address").and_then(|a| a.as_str()) {
-                        // Convert hex address like "0x12345678" to u32
+                        // Convert hex address like "0x55ade765da10" to u64
                         let id = if let Some(hex) = address.strip_prefix("0x") {
-                            u32::from_str_radix(hex, 16).unwrap_or(0)
+                            u64::from_str_radix(hex, 16).unwrap_or(0)
                         } else {
                             0
                         };
@@ -488,8 +488,8 @@ impl WindowManager for HyprlandManager {
         Ok(eve_windows)
     }
 
-    fn activate_window(&self, window_id: u32) -> Result<()> {
-        // Convert u32 back to hex address
+    fn activate_window(&self, window_id: u64) -> Result<()> {
+        // Convert u64 back to hex address
         let address = format!("0x{:x}", window_id);
 
         let output = Command::new("hyprctl")
@@ -570,7 +570,7 @@ impl WindowManager for HyprlandManager {
         Ok(())
     }
 
-    fn get_active_window(&self) -> Result<u32> {
+    fn get_active_window(&self) -> Result<u64> {
         let output = Command::new("hyprctl")
             .arg("activewindow")
             .arg("-j")
@@ -582,7 +582,7 @@ impl WindowManager for HyprlandManager {
 
         if let Some(address) = window.get("address").and_then(|a| a.as_str()) {
             let id = if let Some(hex) = address.strip_prefix("0x") {
-                u32::from_str_radix(hex, 16).unwrap_or(0)
+                u64::from_str_radix(hex, 16).unwrap_or(0)
             } else {
                 0
             };
@@ -592,7 +592,7 @@ impl WindowManager for HyprlandManager {
         anyhow::bail!("Failed to get active window ID")
     }
 
-    fn find_window_by_title(&self, title: &str) -> Result<Option<u32>> {
+    fn find_window_by_title(&self, title: &str) -> Result<Option<u64>> {
         let windows = self.get_all_windows()?;
 
         for window in windows {
@@ -600,7 +600,7 @@ impl WindowManager for HyprlandManager {
                 if window_title == title {
                     if let Some(address) = window.get("address").and_then(|a| a.as_str()) {
                         let id = if let Some(hex) = address.strip_prefix("0x") {
-                            u32::from_str_radix(hex, 16).unwrap_or(0)
+                            u64::from_str_radix(hex, 16).unwrap_or(0)
                         } else {
                             0
                         };
@@ -613,7 +613,7 @@ impl WindowManager for HyprlandManager {
         Ok(None)
     }
 
-    fn minimize_window(&self, window_id: u32) -> Result<()> {
+    fn minimize_window(&self, window_id: u64) -> Result<()> {
         let address = format!("0x{:x}", window_id);
         Command::new("hyprctl")
             .args([
@@ -626,7 +626,7 @@ impl WindowManager for HyprlandManager {
         Ok(())
     }
 
-    fn restore_window(&self, window_id: u32) -> Result<()> {
+    fn restore_window(&self, window_id: u64) -> Result<()> {
         let address = format!("0x{:x}", window_id);
         // Move back to current workspace
         Command::new("hyprctl")

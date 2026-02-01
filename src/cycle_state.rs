@@ -117,7 +117,7 @@ impl CycleState {
         }
     }
 
-    pub fn sync_with_active(&mut self, active_window: u32) {
+    pub fn sync_with_active(&mut self, active_window: u64) {
         // Find which window is active and update current_index
         for (i, window) in self.windows.iter().enumerate() {
             if window.id == active_window {
@@ -204,7 +204,7 @@ impl CycleState {
 mod tests {
     use super::*;
 
-    fn create_test_window(id: u32, title: &str) -> EveWindow {
+    fn create_test_window(id: u64, title: &str) -> EveWindow {
         EveWindow {
             id,
             title: title.to_string(),
@@ -362,7 +362,7 @@ mod tests {
 
     // Mock WindowManager for testing switch_to
     struct MockWindowManager {
-        activated_windows: std::sync::Mutex<Vec<u32>>,
+        activated_windows: std::sync::Mutex<Vec<u64>>,
     }
 
     impl MockWindowManager {
@@ -372,7 +372,7 @@ mod tests {
             }
         }
 
-        fn get_activated(&self) -> Vec<u32> {
+        fn get_activated(&self) -> Vec<u64> {
             self.activated_windows.lock().unwrap().clone()
         }
     }
@@ -382,7 +382,7 @@ mod tests {
             Ok(vec![])
         }
 
-        fn activate_window(&self, window_id: u32) -> anyhow::Result<()> {
+        fn activate_window(&self, window_id: u64) -> anyhow::Result<()> {
             self.activated_windows.lock().unwrap().push(window_id);
             Ok(())
         }
@@ -395,19 +395,19 @@ mod tests {
             Ok(())
         }
 
-        fn get_active_window(&self) -> anyhow::Result<u32> {
+        fn get_active_window(&self) -> anyhow::Result<u64> {
             Ok(0)
         }
 
-        fn find_window_by_title(&self, _title: &str) -> anyhow::Result<Option<u32>> {
+        fn find_window_by_title(&self, _title: &str) -> anyhow::Result<Option<u64>> {
             Ok(None)
         }
 
-        fn minimize_window(&self, _window_id: u32) -> anyhow::Result<()> {
+        fn minimize_window(&self, _window_id: u64) -> anyhow::Result<()> {
             Ok(())
         }
 
-        fn restore_window(&self, _window_id: u32) -> anyhow::Result<()> {
+        fn restore_window(&self, _window_id: u64) -> anyhow::Result<()> {
             Ok(())
         }
     }

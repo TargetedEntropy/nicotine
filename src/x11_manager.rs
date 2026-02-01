@@ -61,7 +61,7 @@ impl X11Manager {
                 // Filter for EVE windows (steam_app_8500) and exclude launcher
                 if title.starts_with("EVE - ") && !title.contains("Launcher") {
                     eve_windows.push(EveWindow {
-                        id: window,
+                        id: window as u64,
                         title: title.trim_start_matches("EVE - ").to_string(),
                     });
                 }
@@ -71,7 +71,7 @@ impl X11Manager {
         Ok(eve_windows)
     }
 
-    pub fn get_active_window(&self) -> Result<u32> {
+    pub fn get_active_window(&self) -> Result<u64> {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
 
@@ -91,20 +91,21 @@ impl X11Manager {
             .ok_or_else(|| anyhow::anyhow!("Failed to get active window"))?
             .collect();
 
-        Ok(*active.first().unwrap_or(&0))
+        Ok(*active.first().unwrap_or(&0) as u64)
     }
 
-    pub fn activate_window(&self, window_id: u32) -> Result<()> {
+    pub fn activate_window(&self, window_id: u64) -> Result<()> {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
+        let window_id_u32 = window_id as u32;
 
-        let current_active = self.get_active_window().unwrap_or(0);
+        let current_active = self.get_active_window().unwrap_or(0) as u32;
 
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
             sequence: 0,
-            window: window_id,
+            window: window_id_u32,
             type_: self.net_active_window_atom,
             data: ClientMessageData::from([2, x11rb::CURRENT_TIME, current_active, 0, 0]),
         };
@@ -117,7 +118,7 @@ impl X11Manager {
         )?;
 
         self.conn
-            .set_input_focus(InputFocus::PARENT, window_id, x11rb::CURRENT_TIME)?;
+            .set_input_focus(InputFocus::PARENT, window_id_u32, x11rb::CURRENT_TIME)?;
 
         self.conn.flush()?;
         Ok(())
@@ -139,7 +140,7 @@ impl X11Manager {
                 .width(width)
                 .height(height);
 
-            self.conn.configure_window(window.id, &values)?;
+            self.conn.configure_window(window.id as u32, &values)?;
         }
 
         self.conn.flush()?;
@@ -178,7 +179,7 @@ impl X11Manager {
         Ok(String::new())
     }
 
-    pub fn find_window_by_title(&self, title: &str) -> Result<Option<u32>> {
+    pub fn find_window_by_title(&self, title: &str) -> Result<Option<u64>> {
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
 
@@ -201,7 +202,7 @@ impl X11Manager {
         for &window in &windows {
             if let Ok(window_title) = self.get_window_title(window) {
                 if window_title == title {
-                    return Ok(Some(window));
+                    return Ok(Some(window as u64));
                 }
             }
         }
@@ -209,14 +210,14 @@ impl X11Manager {
         Ok(None)
     }
 
-    pub fn move_window(&self, window_id: u32, x: i32, y: i32) -> Result<()> {
+    pub fn move_window(&self, window_id: u64, x: i32, y: i32) -> Result<()> {
         let values = ConfigureWindowAux::new().x(x).y(y);
-        self.conn.configure_window(window_id, &values)?;
+        self.conn.configure_window(window_id as u32, &values)?;
         self.conn.flush()?;
         Ok(())
     }
 
-    pub fn minimize_window(&self, window_id: u32) -> Result<()> {
+    pub fn minimize_window(&self, window_id: u64) -> Result<()> {
         // Use WM_CHANGE_STATE with IconicState to minimize
         let wm_change_state = self
             .conn
@@ -226,13 +227,14 @@ impl X11Manager {
 
         let screen = &self.conn.setup().roots[self.screen_num];
         let root = screen.root;
+        let window_id_u32 = window_id as u32;
 
         // IconicState = 3
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
             sequence: 0,
-            window: window_id,
+            window: window_id_u32,
             type_: wm_change_state,
             data: ClientMessageData::from([3u32, 0, 0, 0, 0]),
         };
@@ -248,9 +250,9 @@ impl X11Manager {
         Ok(())
     }
 
-    pub fn restore_window(&self, window_id: u32) -> Result<()> {
+    pub fn restore_window(&self, window_id: u64) -> Result<()> {
         // Map the window to restore it from minimized state
-        self.conn.map_window(window_id)?;
+        self.conn.map_window(window_id as u32)?;
         self.conn.flush()?;
         Ok(())
     }
@@ -261,7 +263,7 @@ impl WindowManager for X11Manager {
         self.get_eve_windows()
     }
 
-    fn activate_window(&self, window_id: u32) -> Result<()> {
+    fn activate_window(&self, window_id: u64) -> Result<()> {
         self.activate_window(window_id)
     }
 
@@ -274,23 +276,23 @@ impl WindowManager for X11Manager {
         self.stack_windows_internal(windows, x, y, width, height)
     }
 
-    fn get_active_window(&self) -> Result<u32> {
+    fn get_active_window(&self) -> Result<u64> {
         self.get_active_window()
     }
 
-    fn find_window_by_title(&self, title: &str) -> Result<Option<u32>> {
+    fn find_window_by_title(&self, title: &str) -> Result<Option<u64>> {
         self.find_window_by_title(title)
     }
 
-    fn move_window(&self, window_id: u32, x: i32, y: i32) -> Result<()> {
+    fn move_window(&self, window_id: u64, x: i32, y: i32) -> Result<()> {
         self.move_window(window_id, x, y)
     }
 
-    fn minimize_window(&self, window_id: u32) -> Result<()> {
+    fn minimize_window(&self, window_id: u64) -> Result<()> {
         self.minimize_window(window_id)
     }
 
-    fn restore_window(&self, window_id: u32) -> Result<()> {
+    fn restore_window(&self, window_id: u64) -> Result<()> {
         self.restore_window(window_id)
     }
 }
