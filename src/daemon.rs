@@ -17,6 +17,8 @@ pub enum Command {
     Forward,
     Backward,
     Switch(usize),
+    GroupForward(String),
+    GroupBackward(String),
     Refresh,
     Quit,
 }
@@ -35,6 +37,14 @@ impl Command {
                     if let Ok(num) = num_str.parse::<usize>() {
                         return Some(Command::Switch(num));
                     }
+                }
+                // Check for group-forward:name format
+                if let Some(group_name) = s.strip_prefix("group-forward:") {
+                    return Some(Command::GroupForward(group_name.to_string()));
+                }
+                // Check for group-backward:name format
+                if let Some(group_name) = s.strip_prefix("group-backward:") {
+                    return Some(Command::GroupBackward(group_name.to_string()));
                 }
                 None
             }
@@ -185,6 +195,42 @@ impl Daemon {
                         self.config.minimize_inactive,
                         self.character_order.as_deref(),
                     )?;
+                }
+                Command::GroupForward(group_name) => {
+                    if let Some(group_members) = self.config.groups.get(&group_name) {
+                        let mut state = self.state.lock().unwrap();
+
+                        // Sync with active window first
+                        if let Ok(active) = self.wm.get_active_window() {
+                            state.sync_with_active(active);
+                        }
+
+                        state.cycle_group_forward(
+                            &*self.wm,
+                            self.config.minimize_inactive,
+                            group_members,
+                        )?;
+                    } else {
+                        eprintln!("Unknown group: {}", group_name);
+                    }
+                }
+                Command::GroupBackward(group_name) => {
+                    if let Some(group_members) = self.config.groups.get(&group_name) {
+                        let mut state = self.state.lock().unwrap();
+
+                        // Sync with active window first
+                        if let Ok(active) = self.wm.get_active_window() {
+                            state.sync_with_active(active);
+                        }
+
+                        state.cycle_group_backward(
+                            &*self.wm,
+                            self.config.minimize_inactive,
+                            group_members,
+                        )?;
+                    } else {
+                        eprintln!("Unknown group: {}", group_name);
+                    }
                 }
                 Command::Refresh => {
                     let windows = self.wm.get_eve_windows()?;

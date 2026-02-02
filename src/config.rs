@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -42,6 +43,10 @@ pub struct Config {
     pub primary_monitor: Option<String>,
     #[serde(default)]
     pub fullscreen_stack: bool,
+    /// Named groups of characters for selective cycling
+    /// Example: { "scouts" = ["Scout1", "Scout2"], "combat" = ["DPS1", "DPS2", "Logi"] }
+    #[serde(default)]
+    pub groups: HashMap<String, Vec<String>>,
 }
 
 fn default_enable_mouse() -> bool {
@@ -317,6 +322,7 @@ impl Config {
             primary_character: None,
             primary_monitor: None,
             fullscreen_stack: false,
+            groups: HashMap::new(),
         };
 
         // Save the generated config
@@ -358,6 +364,7 @@ impl Config {
             primary_character: None,
             primary_monitor: None,
             fullscreen_stack: false,
+            groups: HashMap::new(),
         };
 
         if let Some(parent) = config_path.parent() {
@@ -403,6 +410,7 @@ mod tests {
             primary_character: None,
             primary_monitor: None,
             fullscreen_stack: false,
+            groups: HashMap::new(),
         };
 
         // Height should be: 1080 - 40 = 1040
@@ -434,6 +442,7 @@ mod tests {
             primary_character: None,
             primary_monitor: None,
             fullscreen_stack: false,
+            groups: HashMap::new(),
         };
 
         assert_eq!(config.eve_height_adjusted(), 1080);
@@ -464,6 +473,7 @@ mod tests {
             primary_character: None,
             primary_monitor: None,
             fullscreen_stack: false,
+            groups: HashMap::new(),
         };
 
         let toml_str = toml::to_string(&config).unwrap();
@@ -472,5 +482,45 @@ mod tests {
         assert_eq!(deserialized.display_width, 7680);
         assert_eq!(deserialized.display_height, 2160);
         assert_eq!(deserialized.eve_width, 4147);
+    }
+
+    #[test]
+    fn test_groups_serialization() {
+        let mut groups = HashMap::new();
+        groups.insert("scouts".to_string(), vec!["Scout1".to_string(), "Scout2".to_string()]);
+        groups.insert("combat".to_string(), vec!["DPS1".to_string(), "Logi".to_string()]);
+
+        let config = Config {
+            display_width: 1920,
+            display_height: 1080,
+            panel_height: 0,
+            eve_width: 1000,
+            eve_height: 1080,
+            overlay_x: 10.0,
+            overlay_y: 10.0,
+            enable_mouse_buttons: true,
+            forward_button: 276,
+            backward_button: 275,
+            enable_keyboard_buttons: false,
+            forward_key: 15,
+            backward_key: 15,
+            show_overlay: true,
+            mouse_device_name: None,
+            mouse_device_path: None,
+            minimize_inactive: false,
+            keyboard_device_path: None,
+            modifier_key: None,
+            primary_character: None,
+            primary_monitor: None,
+            fullscreen_stack: false,
+            groups,
+        };
+
+        let toml_str = toml::to_string(&config).unwrap();
+        let deserialized: Config = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(deserialized.groups.len(), 2);
+        assert_eq!(deserialized.groups.get("scouts").unwrap().len(), 2);
+        assert_eq!(deserialized.groups.get("combat").unwrap().len(), 2);
     }
 }

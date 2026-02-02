@@ -308,6 +308,130 @@ fn main() -> Result<()> {
             let _ = std::fs::remove_file("/tmp/nicotine-cycle.lock");
         }
 
+        "group" => {
+            // Usage: nicotine group <name> forward|backward
+            let group_name = args.get(2).map(|s| s.as_str());
+            let direction = args.get(3).map(|s| s.as_str());
+
+            match (group_name, direction) {
+                (Some(name), Some("forward") | Some("f")) => {
+                    // Check if group exists
+                    if !config.groups.contains_key(name) {
+                        eprintln!("Unknown group: {}", name);
+                        eprintln!("Available groups: {:?}", config.groups.keys().collect::<Vec<_>>());
+                        std::process::exit(1);
+                    }
+
+                    // Try daemon first
+                    if daemon::send_command(&format!("group-forward:{}", name)).is_ok() {
+                        return Ok(());
+                    }
+
+                    // Fallback to direct mode
+                    let lock_file = "/tmp/nicotine-cycle.lock";
+                    let file = match OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .mode(0o644)
+                        .open(lock_file)
+                    {
+                        Ok(f) => f,
+                        Err(_) => return Ok(()),
+                    };
+
+                    #[allow(deprecated)]
+                    if flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).is_err() {
+                        return Ok(());
+                    }
+
+                    let mut state = CycleState::new();
+                    let windows = wm.get_eve_windows()?;
+
+                    if windows.is_empty() {
+                        return Ok(());
+                    }
+
+                    state.update_windows(windows);
+
+                    if let Ok(active) = wm.get_active_window() {
+                        state.sync_with_active(active);
+                    }
+
+                    let group_members = config.groups.get(name).unwrap();
+                    state.cycle_group_forward(&*wm, config.minimize_inactive, group_members)?;
+                }
+                (Some(name), Some("backward") | Some("b")) => {
+                    // Check if group exists
+                    if !config.groups.contains_key(name) {
+                        eprintln!("Unknown group: {}", name);
+                        eprintln!("Available groups: {:?}", config.groups.keys().collect::<Vec<_>>());
+                        std::process::exit(1);
+                    }
+
+                    // Try daemon first
+                    if daemon::send_command(&format!("group-backward:{}", name)).is_ok() {
+                        return Ok(());
+                    }
+
+                    // Fallback to direct mode
+                    let lock_file = "/tmp/nicotine-cycle.lock";
+                    let file = match OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .mode(0o644)
+                        .open(lock_file)
+                    {
+                        Ok(f) => f,
+                        Err(_) => return Ok(()),
+                    };
+
+                    #[allow(deprecated)]
+                    if flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).is_err() {
+                        return Ok(());
+                    }
+
+                    let mut state = CycleState::new();
+                    let windows = wm.get_eve_windows()?;
+
+                    if windows.is_empty() {
+                        return Ok(());
+                    }
+
+                    state.update_windows(windows);
+
+                    if let Ok(active) = wm.get_active_window() {
+                        state.sync_with_active(active);
+                    }
+
+                    let group_members = config.groups.get(name).unwrap();
+                    state.cycle_group_backward(&*wm, config.minimize_inactive, group_members)?;
+                }
+                (Some(name), None) | (Some(name), Some(_)) => {
+                    eprintln!("Usage: nicotine group {} forward|backward", name);
+                    std::process::exit(1);
+                }
+                (None, _) => {
+                    if config.groups.is_empty() {
+                        println!("No groups configured.");
+                        println!("Add groups to ~/.config/nicotine/config.toml:");
+                        println!();
+                        println!("[groups]");
+                        println!("scouts = [\"Scout1\", \"Scout2\"]");
+                        println!("combat = [\"DPS1\", \"DPS2\", \"Logi\"]");
+                    } else {
+                        println!("Available groups:");
+                        for (name, members) in &config.groups {
+                            println!("  {} = {:?}", name, members);
+                        }
+                        println!();
+                        println!("Usage: nicotine group <name> forward|backward");
+                    }
+                }
+            }
+        }
+
         "init-config" => {
             Config::save_default()?;
         }
@@ -382,6 +506,11 @@ fn main() -> Result<()> {
                 println!("  nicotine switch N      - Switch to client N (targeted cycling)");
                 println!("  nicotine N             - Shorthand for switch N");
                 println!("  nicotine init-config   - Create default config.toml");
+                println!();
+                println!("Group cycling:");
+                println!("  nicotine group         - List configured groups");
+                println!("  nicotine group <name> forward  - Cycle forward within group");
+                println!("  nicotine group <name> backward - Cycle backward within group");
                 println!();
                 println!("Advanced:");
                 println!("  nicotine daemon        - Start daemon only");

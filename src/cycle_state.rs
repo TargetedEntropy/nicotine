@@ -162,6 +162,118 @@ impl CycleState {
         }
     }
 
+    /// Cycle forward within a specific group of characters
+    /// Only cycles through windows whose titles are in the group list
+    pub fn cycle_group_forward(
+        &mut self,
+        wm: &dyn WindowManager,
+        minimize_inactive: bool,
+        group_members: &[String],
+    ) -> Result<()> {
+        if self.windows.is_empty() || group_members.is_empty() {
+            return Ok(());
+        }
+
+        // Find indices of windows that are in the group
+        let group_indices: Vec<usize> = self
+            .windows
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| group_members.contains(&w.title))
+            .map(|(i, _)| i)
+            .collect();
+
+        if group_indices.is_empty() {
+            return Ok(()); // No windows in this group
+        }
+
+        let previous_index = self.current_index;
+
+        // Find current position in group (or start from beginning)
+        let current_group_pos = group_indices
+            .iter()
+            .position(|&i| i == self.current_index)
+            .unwrap_or(group_indices.len().saturating_sub(1));
+
+        // Move to next position in group
+        let next_group_pos = (current_group_pos + 1) % group_indices.len();
+        self.current_index = group_indices[next_group_pos];
+        self.write_index();
+
+        let new_window_id = self.windows[self.current_index].id;
+
+        if minimize_inactive {
+            let _ = wm.restore_window(new_window_id);
+        }
+
+        wm.activate_window(new_window_id)?;
+
+        if minimize_inactive && previous_index != self.current_index {
+            let previous_window_id = self.windows[previous_index].id;
+            let _ = wm.minimize_window(previous_window_id);
+        }
+
+        Ok(())
+    }
+
+    /// Cycle backward within a specific group of characters
+    /// Only cycles through windows whose titles are in the group list
+    pub fn cycle_group_backward(
+        &mut self,
+        wm: &dyn WindowManager,
+        minimize_inactive: bool,
+        group_members: &[String],
+    ) -> Result<()> {
+        if self.windows.is_empty() || group_members.is_empty() {
+            return Ok(());
+        }
+
+        // Find indices of windows that are in the group
+        let group_indices: Vec<usize> = self
+            .windows
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| group_members.contains(&w.title))
+            .map(|(i, _)| i)
+            .collect();
+
+        if group_indices.is_empty() {
+            return Ok(()); // No windows in this group
+        }
+
+        let previous_index = self.current_index;
+
+        // Find current position in group (or start from beginning)
+        let current_group_pos = group_indices
+            .iter()
+            .position(|&i| i == self.current_index)
+            .unwrap_or(0);
+
+        // Move to previous position in group
+        let prev_group_pos = if current_group_pos == 0 {
+            group_indices.len() - 1
+        } else {
+            current_group_pos - 1
+        };
+        self.current_index = group_indices[prev_group_pos];
+        self.write_index();
+
+        let new_window_id = self.windows[self.current_index].id;
+
+        if minimize_inactive {
+            let _ = wm.restore_window(new_window_id);
+        }
+
+        wm.activate_window(new_window_id)?;
+
+        if minimize_inactive && previous_index != self.current_index {
+            let previous_window_id = self.windows[previous_index].id;
+            let _ = wm.minimize_window(previous_window_id);
+        }
+
+        Ok(())
+    }
+
     /// Switch to a specific target number (1-indexed)
     /// If character_order is provided, uses that to map target -> character name
     /// Otherwise falls back to window list order
@@ -563,6 +675,155 @@ mod tests {
 
         // Switch with no windows
         state.switch_to(1, &wm, false, None).unwrap();
+        assert!(wm.get_activated().is_empty());
+    }
+
+    #[test]
+    fn test_cycle_group_forward() {
+        let mut state = CycleState::new();
+        // Windows: Alpha, Beta, Gamma, Delta, Epsilon
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+            create_test_window(300, "Gamma"),
+            create_test_window(400, "Delta"),
+            create_test_window(500, "Epsilon"),
+        ];
+        state.update_windows(windows);
+        state.current_index = 0; // Start at Alpha
+
+        let wm = MockWindowManager::new();
+
+        // Group only contains: Alpha, Gamma, Epsilon (indices 0, 2, 4)
+        let group = vec!["Alpha".to_string(), "Gamma".to_string(), "Epsilon".to_string()];
+
+        // Cycle forward from Alpha -> should go to Gamma (next in group)
+        state.cycle_group_forward(&wm, false, &group).unwrap();
+        assert_eq!(state.get_current_index(), 2); // Gamma
+        assert_eq!(wm.get_activated(), vec![300]);
+    }
+
+    #[test]
+    fn test_cycle_group_forward_wraps() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+            create_test_window(300, "Gamma"),
+        ];
+        state.update_windows(windows);
+        state.current_index = 2; // Start at Gamma
+
+        let wm = MockWindowManager::new();
+
+        // Group: Alpha, Gamma (indices 0, 2)
+        let group = vec!["Alpha".to_string(), "Gamma".to_string()];
+
+        // Cycle forward from Gamma -> should wrap to Alpha
+        state.cycle_group_forward(&wm, false, &group).unwrap();
+        assert_eq!(state.get_current_index(), 0); // Alpha
+        assert_eq!(wm.get_activated(), vec![100]);
+    }
+
+    #[test]
+    fn test_cycle_group_backward() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+            create_test_window(300, "Gamma"),
+            create_test_window(400, "Delta"),
+        ];
+        state.update_windows(windows);
+        state.current_index = 2; // Start at Gamma
+
+        let wm = MockWindowManager::new();
+
+        // Group: Alpha, Gamma, Delta (indices 0, 2, 3)
+        let group = vec!["Alpha".to_string(), "Gamma".to_string(), "Delta".to_string()];
+
+        // Cycle backward from Gamma -> should go to Alpha (previous in group)
+        state.cycle_group_backward(&wm, false, &group).unwrap();
+        assert_eq!(state.get_current_index(), 0); // Alpha
+        assert_eq!(wm.get_activated(), vec![100]);
+    }
+
+    #[test]
+    fn test_cycle_group_backward_wraps() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+            create_test_window(300, "Gamma"),
+        ];
+        state.update_windows(windows);
+        state.current_index = 0; // Start at Alpha
+
+        let wm = MockWindowManager::new();
+
+        // Group: Alpha, Gamma (indices 0, 2)
+        let group = vec!["Alpha".to_string(), "Gamma".to_string()];
+
+        // Cycle backward from Alpha -> should wrap to Gamma
+        state.cycle_group_backward(&wm, false, &group).unwrap();
+        assert_eq!(state.get_current_index(), 2); // Gamma
+        assert_eq!(wm.get_activated(), vec![300]);
+    }
+
+    #[test]
+    fn test_cycle_group_from_non_member() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+            create_test_window(300, "Gamma"),
+        ];
+        state.update_windows(windows);
+        state.current_index = 1; // Start at Beta (not in group)
+
+        let wm = MockWindowManager::new();
+
+        // Group: Alpha, Gamma (indices 0, 2)
+        let group = vec!["Alpha".to_string(), "Gamma".to_string()];
+
+        // Cycle forward from Beta (non-member) -> should jump to first group member
+        state.cycle_group_forward(&wm, false, &group).unwrap();
+        // Since Beta is not in group, it starts from "last" position and cycles to first
+        assert_eq!(state.get_current_index(), 0); // Alpha
+        assert_eq!(wm.get_activated(), vec![100]);
+    }
+
+    #[test]
+    fn test_cycle_group_empty_group_does_nothing() {
+        let mut state = CycleState::new();
+        let windows = vec![create_test_window(100, "Alpha")];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        let empty_group: Vec<String> = vec![];
+
+        // Cycling with empty group should do nothing
+        state.cycle_group_forward(&wm, false, &empty_group).unwrap();
+        assert!(wm.get_activated().is_empty());
+    }
+
+    #[test]
+    fn test_cycle_group_no_matching_windows() {
+        let mut state = CycleState::new();
+        let windows = vec![
+            create_test_window(100, "Alpha"),
+            create_test_window(200, "Beta"),
+        ];
+        state.update_windows(windows);
+
+        let wm = MockWindowManager::new();
+
+        // Group with characters that don't exist
+        let group = vec!["Omega".to_string(), "Zeta".to_string()];
+
+        // Should do nothing since no windows match
+        state.cycle_group_forward(&wm, false, &group).unwrap();
         assert!(wm.get_activated().is_empty());
     }
 }
